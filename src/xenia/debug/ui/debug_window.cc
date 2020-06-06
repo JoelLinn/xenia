@@ -118,23 +118,24 @@ bool DebugWindow::Initialize() {
 }
 
 void DebugWindow::DrawFrame() {
+  // TODO When imgui docking is merged rewrite this
   xe::ui::GraphicsContextLock lock(window_->context());
 
   auto& io = window_->imgui_drawer()->GetIO();
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(-1, 0));
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  ImGui::SetNextWindowSize(io.DisplaySize, ImGuiCond_Always);
   ImGui::Begin("main_window", nullptr,
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
                    ImGuiWindowFlags_NoSavedSettings);
-  ImGui::SetWindowPos(ImVec2(0, 0));
-  ImGui::SetWindowSize(io.DisplaySize);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
 
   constexpr float kSplitterWidth = 5.0f;
   static float function_pane_width = 150.0f;
   static float source_pane_width = 600.0f;
-  static float registers_pane_width = 170.0f;
+  static float registers_pane_width = 160.0f;
   static float bottom_panes_height = 300.0f;
   static float breakpoints_pane_width = 300.0f;
   float top_panes_height =
@@ -151,7 +152,8 @@ void DebugWindow::DrawFrame() {
     // https://github.com/ocornut/imgui/issues/211
   }
 
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+  // TODO Remove this once Docking/Viewports are available in ImGui Master
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 1));
   ImGui::BeginChild("##function_pane",
                     ImVec2(function_pane_width, top_panes_height), true);
   DrawFunctionsPane();
@@ -189,25 +191,17 @@ void DebugWindow::DrawFrame() {
   }
   ImGui::SameLine();
   ImGui::BeginChild("##right_pane", ImVec2(0, top_panes_height), true);
-  ImGui::BeginGroup();
-  ImGui::RadioButton("Threads", &state_.right_pane_tab,
-                     ImState::kRightPaneThreads);
-  ImGui::SameLine();
-  ImGui::RadioButton("Memory", &state_.right_pane_tab,
-                     ImState::kRightPaneMemory);
-  ImGui::EndGroup();
-  ImGui::Separator();
-  switch (state_.right_pane_tab) {
-    case ImState::kRightPaneThreads:
-      ImGui::BeginChild("##threads_pane");
+  if (ImGui::BeginTabBar("##threads_memory_tabbar",
+                         ImGuiTabBarFlags_NoTooltip)) {
+    if (ImGui::BeginTabItem("Threads")) {
       DrawThreadsPane();
-      ImGui::EndChild();
-      break;
-    case ImState::kRightPaneMemory:
-      ImGui::BeginChild("##memory_pane");
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Memory")) {
       DrawMemoryPane();
-      ImGui::EndChild();
-      break;
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
   }
   ImGui::EndChild();
   ImGui::InvisibleButton("##hsplitter0", ImVec2(-1, kSplitterWidth));
@@ -215,13 +209,11 @@ void DebugWindow::DrawFrame() {
     bottom_panes_height -= io.MouseDelta.y;
     bottom_panes_height = xe::clamp(bottom_panes_height, 30.0f, FLT_MAX);
   }
-  ImGui::BeginChild("##log_pane", ImVec2(log_pane_width, bottom_panes_height),
-                    true);
+  ImGui::BeginChild("##log_pane", ImVec2(log_pane_width, -1), true);
   DrawLogPane();
   ImGui::EndChild();
   ImGui::SameLine();
-  ImGui::InvisibleButton("##vsplitter3",
-                         ImVec2(kSplitterWidth, bottom_panes_height));
+  ImGui::InvisibleButton("##vsplitter3", ImVec2(kSplitterWidth, -1));
   if (ImGui::IsItemActive()) {
     breakpoints_pane_width -= io.MouseDelta.x;
     breakpoints_pane_width = xe::clamp(breakpoints_pane_width, 30.0f, FLT_MAX);
@@ -594,14 +586,8 @@ void DebugWindow::DrawBreakpointGutterButton(
                         has_breakpoint
                             ? ImVec4(1.0f, 0.0f, 0.0f, 0.6f)
                             : ImGui::GetStyle().Colors[ImGuiCol_FrameBg]);
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                        !has_breakpoint
-                            ? ImVec4(1.0f, 0.0f, 0.0f, 0.8f)
-                            : ImGui::GetStyle().Colors[ImGuiCol_FrameBg]);
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                        !has_breakpoint
-                            ? ImVec4(1.0f, 0.0f, 0.0f, 1.0f)
-                            : ImGui::GetStyle().Colors[ImGuiCol_FrameBg]);
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 0.8f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
   if (ImGui::Button(" ##toggle_line_bp")) {
     if (!has_breakpoint) {
       CreateCodeBreakpoint(address_type, address);
@@ -943,10 +929,11 @@ void DebugWindow::DrawRegistersPane() {
 }
 
 void DebugWindow::DrawThreadsPane() {
-  ImGui::BeginGroup();
-  //   checkbox to show host threads
+  ImGui::Checkbox("Show host", &state_.threads_show_host);
+  // ImGui::SameLine();
   //   expand all toggle
-  ImGui::EndGroup();
+  ImGui::Spacing();
+
   ImGui::BeginChild("##threads_listing");
   for (size_t i = 0; i < cache_.thread_debug_infos.size(); ++i) {
     auto thread_info = cache_.thread_debug_infos[i];
@@ -955,6 +942,9 @@ void DebugWindow::DrawThreadsPane() {
         emulator_->kernel_state()->GetThreadByID(thread_info->thread_id);
     if (!thread) {
       // TODO(benvanik): better display of zombie thread states.
+      continue;
+    }
+    if (!state_.threads_show_host && !thread->is_guest_thread()) {
       continue;
     }
     if (is_current_thread && state_.has_changed_thread) {
