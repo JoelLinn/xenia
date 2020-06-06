@@ -134,7 +134,7 @@ void DebugWindow::DrawFrame() {
   constexpr float kSplitterWidth = 5.0f;
   static float function_pane_width = 150.0f;
   static float source_pane_width = 600.0f;
-  static float registers_pane_width = 150.0f;
+  static float registers_pane_width = 170.0f;
   static float bottom_panes_height = 300.0f;
   static float breakpoints_pane_width = 300.0f;
   float top_panes_height =
@@ -645,7 +645,7 @@ bool DebugWindow::DrawRegisterTextBox(int id, uint32_t* value) {
   char label[16] = {0};
   std::snprintf(label, xe::countof(label), "##iregister%d", id);
   bool any_changed = false;
-  ImGui::PushItemWidth(50);
+  ImGui::PushItemWidth(55);
   if (ImGui::InputText(label, buffer,
                        state_.register_input_hex ? 9 : sizeof(buffer),
                        input_flags)) {
@@ -685,7 +685,7 @@ bool DebugWindow::DrawRegisterTextBox(int id, uint64_t* value) {
   char label[16] = {0};
   std::snprintf(label, xe::countof(label), "##lregister%d", id);
   bool any_changed = false;
-  ImGui::PushItemWidth(95);
+  ImGui::PushItemWidth(105);
   if (ImGui::InputText(label, buffer,
                        state_.register_input_hex ? 17 : sizeof(buffer),
                        input_flags)) {
@@ -724,7 +724,7 @@ bool DebugWindow::DrawRegisterTextBox(int id, double* value) {
   char label[16] = {0};
   std::snprintf(label, xe::countof(label), "##dregister%d", id);
   bool any_changed = false;
-  ImGui::PushItemWidth(95);
+  ImGui::PushItemWidth(105);
   if (ImGui::InputText(label, buffer,
                        state_.register_input_hex ? 17 : sizeof(buffer),
                        input_flags)) {
@@ -767,7 +767,7 @@ bool DebugWindow::DrawRegisterTextBoxes(int id, float* value) {
       std::snprintf(buffer, xe::countof(buffer), "%F", value[i]);
     }
     std::snprintf(label, xe::countof(label), "##vregister%d_%d", id, i);
-    ImGui::PushItemWidth(50);
+    ImGui::PushItemWidth(55);
     if (ImGui::InputText(label, buffer,
                          state_.register_input_hex ? 9 : sizeof(buffer),
                          input_flags)) {
@@ -795,148 +795,97 @@ bool DebugWindow::DrawRegisterTextBoxes(int id, float* value) {
 }
 
 void DebugWindow::DrawRegistersPane() {
-  if (state_.register_group == RegisterGroup::kGuestGeneral) {
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    ImGui::Button("GPR");
-    ImGui::PopStyleColor();
-  } else {
-    if (ImGui::Button("GPR")) {
-      state_.register_group = RegisterGroup::kGuestGeneral;
-    }
-  }
-  ImGui::SameLine();
-  if (state_.register_group == RegisterGroup::kGuestFloat) {
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    ImGui::Button("FPR");
-    ImGui::PopStyleColor();
-  } else {
-    if (ImGui::Button("FPR")) {
-      state_.register_group = RegisterGroup::kGuestFloat;
-    }
-  }
-  ImGui::SameLine();
-  if (state_.register_group == RegisterGroup::kGuestVector) {
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    ImGui::Button("VMX");
-    ImGui::PopStyleColor();
-  } else {
-    if (ImGui::Button("VMX")) {
-      state_.register_group = RegisterGroup::kGuestVector;
-    }
-  }
-  ImGui::SameLine();
-  if (state_.register_group == RegisterGroup::kHostGeneral) {
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    ImGui::Button("x64");
-    ImGui::PopStyleColor();
-  } else {
-    if (ImGui::Button("x64")) {
-      state_.register_group = RegisterGroup::kHostGeneral;
-    }
-  }
-  ImGui::SameLine();
-  if (state_.register_group == RegisterGroup::kHostVector) {
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-    ImGui::Button("XMM");
-    ImGui::PopStyleColor();
-  } else {
-    if (ImGui::Button("XMM")) {
-      state_.register_group = RegisterGroup::kHostVector;
-    }
+  auto thread_info = state_.thread_info;
+  if (!thread_info) {
+    return;
   }
 
   ImGui::Checkbox("Hex", &state_.register_input_hex);
-
-  if (!state_.thread_info) {
-    return;
-  }
-  auto thread_info = state_.thread_info;
+  ImGui::Spacing();
 
   bool dirty_guest_context = false;
   bool dirty_host_context = false;
-  switch (state_.register_group) {
-    case RegisterGroup::kGuestGeneral: {
-      if (!thread_info->guest_context.physical_membase) {
-        return;
-      }
-      ImGui::BeginChild("##guest_general");
-      ImGui::BeginGroup();
-      ImGui::AlignTextToFramePadding();
-      ImGui::Text(" lr");
-      ImGui::SameLine();
-      ImGui::Dummy(ImVec2(4, 0));
-      ImGui::SameLine();
-      dirty_guest_context |=
-          DrawRegisterTextBox(100, &thread_info->guest_context.lr);
-      ImGui::EndGroup();
-      ImGui::BeginGroup();
-      ImGui::AlignTextToFramePadding();
-      ImGui::Text("ctr");
-      ImGui::SameLine();
-      ImGui::Dummy(ImVec2(4, 0));
-      ImGui::SameLine();
-      dirty_guest_context |=
-          DrawRegisterTextBox(101, &thread_info->guest_context.ctr);
-      ImGui::EndGroup();
-      // CR
-      // XER
-      // FPSCR
-      // VSCR
-      for (int i = 0; i < 32; ++i) {
+  if (ImGui::BeginTabBar("##RegistersPaneTabBar", ImGuiTabBarFlags_NoTooltip)) {
+    if (ImGui::BeginTabItem("GPR")) {
+      if (thread_info->guest_context.physical_membase) {
+        ImGui::BeginChild("##guest_general");
         ImGui::BeginGroup();
         ImGui::AlignTextToFramePadding();
-        ImGui::Text(i < 10 ? " r%d" : "r%d", i);
+        ImGui::Text(" lr");
         ImGui::SameLine();
         ImGui::Dummy(ImVec2(4, 0));
         ImGui::SameLine();
         dirty_guest_context |=
-            DrawRegisterTextBox(i, &thread_info->guest_context.r[i]);
+            DrawRegisterTextBox(100, &thread_info->guest_context.lr);
         ImGui::EndGroup();
-      }
-      ImGui::EndChild();
-    } break;
-    case RegisterGroup::kGuestFloat: {
-      if (!thread_info->guest_context.physical_membase) {
-        return;
-      }
-      ImGui::BeginChild("##guest_float");
-      for (int i = 0; i < 32; ++i) {
         ImGui::BeginGroup();
         ImGui::AlignTextToFramePadding();
-        ImGui::Text(i < 10 ? " f%d" : "f%d", i);
+        ImGui::Text("ctr");
         ImGui::SameLine();
         ImGui::Dummy(ImVec2(4, 0));
         ImGui::SameLine();
         dirty_guest_context |=
-            DrawRegisterTextBox(i, &thread_info->guest_context.f[i]);
+            DrawRegisterTextBox(101, &thread_info->guest_context.ctr);
         ImGui::EndGroup();
+        // CR
+        // XER
+        // FPSCR
+        // VSCR
+        for (int i = 0; i < 32; ++i) {
+          ImGui::BeginGroup();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text(i < 10 ? " r%d" : "r%d", i);
+          ImGui::SameLine();
+          ImGui::Dummy(ImVec2(4, 0));
+          ImGui::SameLine();
+          dirty_guest_context |=
+              DrawRegisterTextBox(i, &thread_info->guest_context.r[i]);
+          ImGui::EndGroup();
+        }
+        ImGui::EndChild();
       }
-      ImGui::EndChild();
-    } break;
-    case RegisterGroup::kGuestVector: {
-      if (!thread_info->guest_context.physical_membase) {
-        return;
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("FPR")) {
+      if (thread_info->guest_context.physical_membase) {
+        ImGui::BeginChild("##guest_float");
+        for (int i = 0; i < 32; ++i) {
+          ImGui::BeginGroup();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text(i < 10 ? " f%d" : "f%d", i);
+          ImGui::SameLine();
+          ImGui::Dummy(ImVec2(4, 0));
+          ImGui::SameLine();
+          dirty_guest_context |=
+              DrawRegisterTextBox(i, &thread_info->guest_context.f[i]);
+          ImGui::EndGroup();
+        }
+        ImGui::EndChild();
       }
-      ImGui::BeginChild("##guest_vector");
-      for (int i = 0; i < 128; ++i) {
-        ImGui::BeginGroup();
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text(i < 10 ? "  v%d" : (i < 100 ? " v%d" : "v%d"), i);
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(4, 0));
-        ImGui::SameLine();
-        dirty_guest_context |=
-            DrawRegisterTextBoxes(i, thread_info->guest_context.v[i].f32);
-        ImGui::EndGroup();
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("VMX")) {
+      if (thread_info->guest_context.physical_membase) {
+        ImGui::BeginChild("##guest_vector");
+        for (int i = 0; i < 128; ++i) {
+          ImGui::BeginGroup();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text(i < 10 ? "  v%d" : (i < 100 ? " v%d" : "v%d"), i);
+          ImGui::SameLine();
+          ImGui::Dummy(ImVec2(4, 0));
+          ImGui::SameLine();
+          dirty_guest_context |=
+              DrawRegisterTextBoxes(i, thread_info->guest_context.v[i].f32);
+          ImGui::EndGroup();
+        }
+        ImGui::EndChild();
       }
-      ImGui::EndChild();
-    } break;
-    case RegisterGroup::kHostGeneral: {
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("x64")) {
       ImGui::BeginChild("##host_general");
       for (int i = 0; i < 18; ++i) {
         auto reg = static_cast<X64Register>(i);
@@ -959,8 +908,10 @@ void DebugWindow::DrawRegistersPane() {
         ImGui::EndGroup();
       }
       ImGui::EndChild();
-    } break;
-    case RegisterGroup::kHostVector: {
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("XMM")) {
       ImGui::BeginChild("##host_vector");
       for (int i = 0; i < 16; ++i) {
         auto reg =
@@ -976,7 +927,10 @@ void DebugWindow::DrawRegistersPane() {
         ImGui::EndGroup();
       }
       ImGui::EndChild();
+      ImGui::EndTabItem();
     }
+
+    ImGui::EndTabBar();
   }
 
   if (dirty_guest_context) {

@@ -127,7 +127,6 @@ class DebugWindow : public cpu::DebugListener {
     bool has_changed_pc = false;
     int source_display_mode = 3;
 
-    RegisterGroup register_group = RegisterGroup::kGuestGeneral;
     bool register_input_hex = true;
 
     struct {
