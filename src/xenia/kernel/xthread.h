@@ -13,6 +13,7 @@
 #include <atomic>
 #include <string>
 
+#include "xenia/base/clock.h"
 #include "xenia/base/mutex.h"
 #include "xenia/base/threading.h"
 #include "xenia/cpu/thread.h"
@@ -190,6 +191,27 @@ class XThread : public XObject, public cpu::Thread {
     pending_mutant_acquires_.push_back(mutant);
   }
 
+  void SetDebugWaitObjects(XObject** objects, size_t count) {
+    if (!objects) {
+      assert_true(count == 0);
+      debug_wait_objects_.clear();
+    } else {
+      assert_true(count > 0);
+      debug_wait_objects_.resize(count);
+      std::memcpy(debug_wait_objects_.data(), objects,
+                  count * sizeof(debug_wait_objects_[0]));
+      debug_wait_start_ = Clock::QueryGuestUptimeMillis();
+    }
+  }
+  // List of XObjects currently being awaited
+  std::vector<XObject*> debug_wait_objects() const {
+    return debug_wait_objects_;
+  }
+  // The guest ms uptime when the waiting started
+  uint64_t debug_wait_time() const {
+    return Clock::QueryGuestUptimeMillis() - debug_wait_start_;
+  }
+
  protected:
   bool AllocateStack(uint32_t size);
   void FreeStack();
@@ -225,6 +247,9 @@ class XThread : public XObject, public cpu::Thread {
   xe::global_critical_region global_critical_region_;
   std::atomic<uint32_t> irql_ = {0};
   util::NativeList apc_list_;
+
+  std::vector<xe::kernel::XObject*> debug_wait_objects_ = {};
+  uint64_t debug_wait_start_ = 0;
 };
 
 class XHostThread : public XThread {

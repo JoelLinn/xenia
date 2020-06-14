@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2013 Ben Vanik. All rights reserved.                             *
+ * Copyright 2020 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -25,6 +25,8 @@
 #include "xenia/kernel/xsemaphore.h"
 #include "xenia/kernel/xsymboliclink.h"
 #include "xenia/kernel/xthread.h"
+
+DECLARE_bool(debug);
 
 namespace xe {
 namespace kernel {
@@ -204,23 +206,40 @@ X_STATUS XObject::Wait(uint32_t wait_reason, uint32_t processor_mode,
                         TimeoutTicksToMs(*opt_timeout)))
                   : std::chrono::milliseconds::max();
 
+  XThread* xthread;
+  if (cvars::debug) {
+    xthread = xe::kernel::XThread::GetCurrentThread();
+    XObject* _this = this;
+    xthread->SetDebugWaitObjects(&_this, 1);
+  }
+
   auto result =
       xe::threading::Wait(wait_handle, alertable ? true : false, timeout_ms);
+  X_STATUS ret;
   switch (result) {
     case xe::threading::WaitResult::kSuccess:
       WaitCallback();
-      return X_STATUS_SUCCESS;
+      ret = X_STATUS_SUCCESS;
+      break;
     case xe::threading::WaitResult::kUserCallback:
       // Or X_STATUS_ALERTED?
-      return X_STATUS_USER_APC;
+      ret = X_STATUS_USER_APC;
+      break;
     case xe::threading::WaitResult::kTimeout:
       xe::threading::MaybeYield();
-      return X_STATUS_TIMEOUT;
+      ret = X_STATUS_TIMEOUT;
+      break;
     default:
     case xe::threading::WaitResult::kAbandoned:
     case xe::threading::WaitResult::kFailed:
-      return X_STATUS_ABANDONED_WAIT_0;
+      ret = X_STATUS_ABANDONED_WAIT_0;
+      break;
   }
+
+  if (cvars::debug) {
+    xthread->SetDebugWaitObjects(nullptr, 0);
+  }
+  return ret;
 }
 
 X_STATUS XObject::SignalAndWait(XObject* signal_object, XObject* wait_object,
@@ -231,24 +250,40 @@ X_STATUS XObject::SignalAndWait(XObject* signal_object, XObject* wait_object,
                         TimeoutTicksToMs(*opt_timeout)))
                   : std::chrono::milliseconds::max();
 
+  XThread* xthread;
+  if (cvars::debug) {
+    xthread = xe::kernel::XThread::GetCurrentThread();
+    xthread->SetDebugWaitObjects(&wait_object, 1);
+  }
+
   auto result = xe::threading::SignalAndWait(
       signal_object->GetWaitHandle(), wait_object->GetWaitHandle(),
       alertable ? true : false, timeout_ms);
+  X_STATUS ret;
   switch (result) {
     case xe::threading::WaitResult::kSuccess:
       wait_object->WaitCallback();
-      return X_STATUS_SUCCESS;
+      ret = X_STATUS_SUCCESS;
+      break;
     case xe::threading::WaitResult::kUserCallback:
       // Or X_STATUS_ALERTED?
-      return X_STATUS_USER_APC;
+      ret = X_STATUS_USER_APC;
+      break;
     case xe::threading::WaitResult::kTimeout:
       xe::threading::MaybeYield();
-      return X_STATUS_TIMEOUT;
+      ret = X_STATUS_TIMEOUT;
+      break;
     default:
     case xe::threading::WaitResult::kAbandoned:
     case xe::threading::WaitResult::kFailed:
-      return X_STATUS_ABANDONED_WAIT_0;
+      ret = X_STATUS_ABANDONED_WAIT_0;
+      break;
   }
+
+  if (cvars::debug) {
+    xthread->SetDebugWaitObjects(nullptr, 0);
+  }
+  return ret;
 }
 
 X_STATUS XObject::WaitMultiple(uint32_t count, XObject** objects,
@@ -266,6 +301,13 @@ X_STATUS XObject::WaitMultiple(uint32_t count, XObject** objects,
                         TimeoutTicksToMs(*opt_timeout)))
                   : std::chrono::milliseconds::max();
 
+  XThread* xthread;
+  if (cvars::debug) {
+    xthread = xe::kernel::XThread::GetCurrentThread();
+    xthread->SetDebugWaitObjects(objects, count);
+  }
+
+  X_STATUS ret;
   if (wait_type) {
     auto result = xe::threading::WaitAny(std::move(wait_handles),
                                          alertable ? true : false, timeout_ms);
@@ -273,18 +315,23 @@ X_STATUS XObject::WaitMultiple(uint32_t count, XObject** objects,
       case xe::threading::WaitResult::kSuccess:
         objects[result.second]->WaitCallback();
 
-        return X_STATUS(result.second);
+        ret = X_STATUS(result.second);
+        break;
       case xe::threading::WaitResult::kUserCallback:
         // Or X_STATUS_ALERTED?
-        return X_STATUS_USER_APC;
+        ret = X_STATUS_USER_APC;
+        break;
       case xe::threading::WaitResult::kTimeout:
         xe::threading::MaybeYield();
-        return X_STATUS_TIMEOUT;
+        ret = X_STATUS_TIMEOUT;
+        break;
       default:
       case xe::threading::WaitResult::kAbandoned:
-        return X_STATUS(X_STATUS_ABANDONED_WAIT_0 + result.second);
+        ret = X_STATUS(X_STATUS_ABANDONED_WAIT_0 + result.second);
+        break;
       case xe::threading::WaitResult::kFailed:
-        return X_STATUS_UNSUCCESSFUL;
+        ret = X_STATUS_UNSUCCESSFUL;
+        break;
     }
   } else {
     auto result = xe::threading::WaitAll(std::move(wait_handles),
@@ -295,19 +342,28 @@ X_STATUS XObject::WaitMultiple(uint32_t count, XObject** objects,
           objects[i]->WaitCallback();
         }
 
-        return X_STATUS_SUCCESS;
+        ret = X_STATUS_SUCCESS;
+        break;
       case xe::threading::WaitResult::kUserCallback:
         // Or X_STATUS_ALERTED?
-        return X_STATUS_USER_APC;
+        ret = X_STATUS_USER_APC;
+        break;
       case xe::threading::WaitResult::kTimeout:
         xe::threading::MaybeYield();
-        return X_STATUS_TIMEOUT;
+        ret = X_STATUS_TIMEOUT;
+        break;
       default:
       case xe::threading::WaitResult::kAbandoned:
       case xe::threading::WaitResult::kFailed:
-        return X_STATUS_ABANDONED_WAIT_0;
+        ret = X_STATUS_ABANDONED_WAIT_0;
+        break;
     }
   }
+
+  if (cvars::debug) {
+    xthread->SetDebugWaitObjects(nullptr, 0);
+  }
+  return ret;
 }
 
 uint8_t* XObject::CreateNative(uint32_t size) {

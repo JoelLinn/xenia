@@ -929,7 +929,13 @@ void DebugWindow::DrawRegistersPane() {
 }
 
 void DebugWindow::DrawThreadsPane() {
-  ImGui::Checkbox("Show host", &state_.threads_show_host);
+  ImGui::Text("Show:");
+  ImGui::SameLine();
+  ImGui::Checkbox("Host", &state_.threads_show_host);
+  ImGui::SameLine();
+  ImGui::Checkbox("Stack", &state_.threads_show_stack);
+  ImGui::SameLine();
+  ImGui::Checkbox("Properties", &state_.threads_show_props);
   // ImGui::SameLine();
   //   expand all toggle
   ImGui::Spacing();
@@ -973,59 +979,101 @@ void DebugWindow::DrawThreadsPane() {
         state_label = "ZOMBIE";
       }
     }
-    char thread_label[256];
-    std::snprintf(thread_label, xe::countof(thread_label),
-                  "%-5s %-7s id=%.4X hnd=%.4X   %s",
-                  thread->is_guest_thread() ? "guest" : "host", state_label,
-                  thread->thread_id(), thread->handle(),
-                  thread->name().c_str());
+    const auto thread_label = fmt::format(
+        "{:<5} {:<7} id={:04X} hnd={:04X}   {}",
+        thread->is_guest_thread() ? "guest" : "host", state_label,
+        thread->thread_id(), thread->handle(), thread->thread_name());
     if (ImGui::CollapsingHeader(
-            thread_label,
+            thread_label.c_str(),
             is_current_thread ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
       //   |     (log button) detail of kernel call categories
       // log button toggles only logging that thread
-      ImGui::BulletText("Call Stack");
-      ImGui::Indent();
-      for (size_t j = 0; j < thread_info->frames.size(); ++j) {
-        bool is_current_frame =
-            is_current_thread && j == state_.thread_stack_frame_index;
-        auto& frame = thread_info->frames[j];
-        if (is_current_thread && !frame.guest_pc) {
-          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.6f));
+      if (state_.threads_show_stack) {
+        ImGui::BulletText("Call Stack");
+        ImGui::Indent();
+        for (size_t j = 0; j < thread_info->frames.size(); ++j) {
+          bool is_current_frame =
+              is_current_thread && j == state_.thread_stack_frame_index;
+          auto& frame = thread_info->frames[j];
+          if (is_current_thread && !frame.guest_pc) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 1.0f, 0.6f));
+          }
+          if (ImGui::Selectable(fmt::format("{:016X}", frame.host_pc).c_str(),
+                                is_current_frame,
+                                ImGuiSelectableFlags_SpanAllColumns)) {
+            SelectThreadStackFrame(thread_info, j, true);
+          }
+          ImGui::SameLine();
+          ImGui::Dummy(ImVec2(8, 0));
+          ImGui::SameLine();
+          if (frame.guest_pc) {
+            ImGui::Text("%08X", frame.guest_pc);
+          } else {
+            ImGui::Text("        ");
+          }
+          ImGui::SameLine();
+          ImGui::Dummy(ImVec2(8, 0));
+          ImGui::SameLine();
+          // breakpoints set? or something?
+          ImGui::Text(" ");
+          ImGui::SameLine();
+          ImGui::Dummy(ImVec2(8, 0));
+          ImGui::SameLine();
+          if (frame.guest_function) {
+            ImGui::Text("%s", frame.guest_function->name().c_str());
+          } else {
+            ImGui::Text("%s", frame.name);
+          }
+          if (is_current_thread && !frame.guest_pc) {
+            ImGui::PopStyleColor();
+          }
         }
-        char host_label[64];
-        std::snprintf(host_label, xe::countof(host_label), "%016" PRIX64 "##%p",
-                      frame.host_pc, &frame);
-        if (ImGui::Selectable(host_label, is_current_frame,
-                              ImGuiSelectableFlags_SpanAllColumns)) {
-          SelectThreadStackFrame(thread_info, j, true);
-        }
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(8, 0));
-        ImGui::SameLine();
-        if (frame.guest_pc) {
-          ImGui::Text("%08X", frame.guest_pc);
-        } else {
-          ImGui::Text("        ");
-        }
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(8, 0));
-        ImGui::SameLine();
-        // breakpoints set? or something?
-        ImGui::Text(" ");
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(8, 0));
-        ImGui::SameLine();
-        if (frame.guest_function) {
-          ImGui::Text("%s", frame.guest_function->name().c_str());
-        } else {
-          ImGui::Text("%s", frame.name);
-        }
-        if (is_current_thread && !frame.guest_pc) {
-          ImGui::PopStyleColor();
-        }
+        ImGui::Unindent();
       }
-      ImGui::Unindent();
+      if (state_.threads_show_props) {
+        ImGui::BulletText("Properties");
+        ImGui::Indent();
+        {
+          ImGui::BulletText("Object wait:");
+          ImGui::Indent();
+          const auto waitfor_objs = thread->debug_wait_objects();
+          const auto waitfor_time = thread->debug_wait_time();
+          bool is_waiting = false;
+          bool is_waiting_long = waitfor_time > 100;
+          std::string handles_text = "Handles : ";
+          // We read here without locking so it may fail
+          for (auto waitfor_obj : waitfor_objs) {
+            if (!waitfor_obj) {
+              break;
+            }
+            auto& handles = waitfor_obj->handles();
+            if (handles.size()) {
+              is_waiting = true;
+              assert_true(handles.size() ==
+                          1);  // How to handle multiple handles per object?
+              handles_text += fmt::format("{:08X} ", waitfor_obj->handle());
+            }
+          }
+          if (is_waiting) {
+            if (is_waiting_long) {
+              ImGui::PushStyleColor(ImGuiCol_Text,
+                                    ImVec4(1.0f, 0.0f, 0.0f, 0.6f));
+            }
+            ImGui::Text("%s", handles_text.c_str());
+            ImGui::Text("%s",
+                        fmt::format("For (ms): {:>8d}", waitfor_time).c_str());
+            if (is_waiting_long) {
+              ImGui::PopStyleColor();
+            }
+          } else {
+            ImGui::Text("");
+            ImGui::Text("");
+          }
+          ImGui::Unindent();
+        }
+        ImGui::Unindent();
+      }
     }
     ImGui::PopStyleColor();
     ImGui::PopID();

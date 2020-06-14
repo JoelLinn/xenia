@@ -119,7 +119,9 @@ X_STATUS ObjectTable::AddHandle(XObject* object, X_HANDLE* out_handle) {
       // Retain so long as the object is in the table.
       object->Retain();
 
-      XELOGI("Added handle:{:08X} for {}", handle, typeid(*object).name());
+      // TODO investigate why typeid always reports XObject
+      XELOGI("Added handle:{:08X} for {} of type {}", handle,
+             typeid(*object).name(), object->type());
     }
   }
 

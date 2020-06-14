@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2015 Ben Vanik. All rights reserved.                             *
+ * Copyright 2020 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -125,6 +125,8 @@ class DebugWindow : public cpu::DebugListener {
 
     bool register_input_hex = true;
     bool threads_show_host = false;
+    bool threads_show_stack = true;
+    bool threads_show_props = true;
 
     struct {
       char kernel_call_filter[64] = {0};
