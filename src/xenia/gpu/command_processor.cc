@@ -73,6 +73,8 @@ bool CommandProcessor::Initialize(
         WorkerThreadMain();
         return 0;
       }));
+  // TODO: Suspend this to not call interrupts (but locks window loop swaps)
+  // worker_thread_->set_can_debugger_suspend(true);
   worker_thread_->set_name("GraphicsSystem Command Processor");
   worker_thread_->Create();
 
@@ -832,7 +834,6 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(RingBuffer* reader,
     IssueSwap(frontbuffer_ptr, frontbuffer_width, frontbuffer_height);
   }
 
-  ++counter_;
   return true;
 }
 
