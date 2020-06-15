@@ -319,6 +319,8 @@ bool Processor::DemandFunction(Function* function) {
 bool Processor::Execute(ThreadState* thread_state, uint32_t address) {
   SCOPE_profile_cpu_f("cpu");
 
+  assert_true(execution_state_ == ExecutionState::kRunning);
+
   // Attempt to get the function.
   auto function = ResolveFunction(address);
   if (!function) {
@@ -349,6 +351,8 @@ bool Processor::Execute(ThreadState* thread_state, uint32_t address) {
 
 bool Processor::ExecuteRaw(ThreadState* thread_state, uint32_t address) {
   SCOPE_profile_cpu_f("cpu");
+
+  assert_true(execution_state_ == ExecutionState::kRunning);
 
   // Attempt to get the function.
   auto function = ResolveFunction(address);
@@ -610,63 +614,66 @@ void Processor::DemandDebugListener() {
 }
 
 bool Processor::OnThreadBreakpointHit(Exception* ex) {
-  auto global_lock = global_critical_region_.Acquire();
+  xe::cpu::ThreadDebugInfo* thread_info;
+  {
+    auto global_lock = global_critical_region_.Acquire();
 
-  // Suspend all threads (but ourselves).
-  SuspendAllThreads();
+    // Suspend all threads (but ourselves).
+    SuspendAllThreads();
 
-  // Lookup thread info block.
-  auto it = thread_debug_infos_.find(ThreadState::GetThreadID());
-  if (it == thread_debug_infos_.end()) {
-    // Not found - exception on a thread we don't know about?
-    assert_always("UD2 on a thread we don't track");
-    return false;
-  }
-  auto thread_info = it->second.get();
+    // Lookup thread info block.
+    auto it = thread_debug_infos_.find(ThreadState::GetThreadID());
+    if (it == thread_debug_infos_.end()) {
+      // Not found - exception on a thread we don't know about?
+      assert_always("UD2 on a thread we don't track");
+      ResumeAllThreads();
+      return false;
+    }
+    thread_info = it->second.get();
 
-  // Run through and uninstall all breakpoint UD2s to get us back to a clean
-  // state.
-  if (execution_state_ != ExecutionState::kStepping) {
-    SuspendAllBreakpoints();
-  }
+    // Run through and uninstall all breakpoint UD2s to get us back to a clean
+    // state.
+    if (execution_state_ != ExecutionState::kStepping) {
+      SuspendAllBreakpoints();
+    }
 
-  // Update all thread states with their latest values, using the context we
-  // got from the exception instead of a sampled value (as it would just show
-  // the exception handler).
-  UpdateThreadExecutionStates(thread_info->thread_id, ex->thread_context());
+    // Update all thread states with their latest values, using the context we
+    // got from the exception instead of a sampled value (as it would just show
+    // the exception handler).
+    UpdateThreadExecutionStates(thread_info->thread_id, ex->thread_context());
 
-  // Walk the captured thread stack and look for breakpoints at any address in
-  // the stack. We just look for the first one.
-  Breakpoint* breakpoint = nullptr;
-  for (size_t i = 0; i < thread_info->frames.size(); ++i) {
-    auto& frame = thread_info->frames[i];
-    for (auto scan_breakpoint : breakpoints_) {
-      if ((scan_breakpoint->address_type() == Breakpoint::AddressType::kGuest &&
-           scan_breakpoint->guest_address() == frame.guest_pc) ||
-          (scan_breakpoint->address_type() == Breakpoint::AddressType::kHost &&
-           scan_breakpoint->host_address() == frame.host_pc)) {
-        breakpoint = scan_breakpoint;
+    // Walk the captured thread stack and look for breakpoints at any address in
+    // the stack. We just look for the first one.
+    Breakpoint* breakpoint = nullptr;
+    for (size_t i = 0; i < thread_info->frames.size(); ++i) {
+      auto& frame = thread_info->frames[i];
+      for (auto scan_breakpoint : breakpoints_) {
+        if ((scan_breakpoint->address_type() ==
+                 Breakpoint::AddressType::kGuest &&
+             scan_breakpoint->guest_address() == frame.guest_pc) ||
+            (scan_breakpoint->address_type() ==
+                 Breakpoint::AddressType::kHost &&
+             scan_breakpoint->host_address() == frame.host_pc)) {
+          breakpoint = scan_breakpoint;
+          break;
+        }
+      }
+      if (breakpoint) {
+        breakpoint->OnHit(thread_info, frame.host_pc);
         break;
       }
     }
-    if (breakpoint) {
-      breakpoint->OnHit(thread_info, frame.host_pc);
-      break;
+
+    // We are waiting on the debugger now. Either wait for it to continue, add a
+    // new step, or direct us somewhere else.
+    // The debugger will ResumeAllThreads or just resume us (depending on what
+    // it wants to do).
+    execution_state_ = ExecutionState::kPaused;
+    thread_info->suspended = true;
+
+    if (debug_listener_) {
+      debug_listener_->OnExecutionPaused();
     }
-  }
-
-  // We are waiting on the debugger now. Either wait for it to continue, add a
-  // new step, or direct us somewhere else.
-  // The debugger will ResumeAllThreads or just resume us (depending on what
-  // it wants to do).
-  execution_state_ = ExecutionState::kPaused;
-  thread_info->suspended = true;
-
-  // Must unlock, or we will deadlock.
-  global_lock.unlock();
-
-  if (debug_listener_) {
-    debug_listener_->OnExecutionPaused();
   }
 
   thread_info->thread->thread()->Suspend();
@@ -825,7 +832,7 @@ void Processor::UpdateThreadExecutionStates(uint32_t override_thread_id,
     }
 
     // Grab stack trace and X64 context then resolve all symbols.
-    uint64_t hash;
+    uint64_t hash = 0;
     X64Context* in_host_context = nullptr;
     if (override_thread_id == thread_info->thread_id) {
       // If we were passed an override context we use that. Otherwise, ask the
