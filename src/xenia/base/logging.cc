@@ -289,16 +289,20 @@ class Logger {
 };
 
 void InitializeLogging(const std::string_view app_name) {
+#if XE_OPTION_ENABLE_LOGGING
   auto mem = memory::AlignedAlloc<Logger>(0x10);
   logger_ = new (mem) Logger(app_name);
+#endif
 }
 
 void ShutdownLogging() {
   Logger* logger = logger_;
   logger_ = nullptr;
 
-  logger->~Logger();
-  memory::AlignedFree(logger);
+  if (logger) {
+    logger->~Logger();
+    memory::AlignedFree(logger);
+  }
 }
 
 bool logging::internal::ShouldLog(LogLevel log_level) {

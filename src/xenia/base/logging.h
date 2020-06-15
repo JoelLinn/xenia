@@ -135,8 +135,6 @@ void XELOGFS(const char* format, const Args&... args) {
 #define XELOGKERNEL(...) XELOGDUMMY
 #define XELOGFS(...) XELOGDUMMY
 
-#undef XELOGDUMMY
-
 #endif  // ENABLE_LOGGING
 
 #endif  // XENIA_BASE_LOGGING_H_

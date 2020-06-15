@@ -246,7 +246,7 @@ enum class PPCRegister {
 };
 
 #pragma pack(push, 8)
-typedef struct PPCContext_s {
+struct PPCContext {
   // Must be stored at 0x0 for now.
   // TODO(benvanik): find a nice way to describe this to the JIT.
   ThreadState* thread_state;  // 0x0
@@ -433,7 +433,7 @@ typedef struct PPCContext_s {
   void SetRegFromString(const char* name, const char* value);
   bool CompareRegWithString(const char* name, const char* value,
                             std::string& result) const;
-} PPCContext;
+};
 #pragma pack(pop)
 static_assert(sizeof(PPCContext) % 64 == 0, "64b padded");
 
