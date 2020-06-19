@@ -20,9 +20,8 @@
 #include "xenia/base/ring_buffer.h"
 
 extern "C" {
-#include "third_party/libav/libavcodec/avcodec.h"
-#include "third_party/libav/libavcodec/xma2dec.h"
-#include "third_party/libav/libavutil/channel_layout.h"
+#include "third_party/FFmpeg/libavcodec/avcodec.h"
+#include "third_party/FFmpeg/libavcodec/wma.h"
 
 extern AVCodec ff_xma2_decoder;
 }  // extern "C"
@@ -558,7 +557,7 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       }
     } else if (len < 0) {
       // Did not get frame
-      XELOGAPU("libav failed to decode a frame!");
+      XELOGAPU("FFmpeg failed to decode a frame!");
       if (frame_size && frame_size != 0x7FFF) {
         data->input_buffer_read_offset += frame_size;
       } else {
@@ -637,7 +636,7 @@ int XmaContext::PrepareDecoder(uint8_t* block, size_t size, int sample_rate,
         channels == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
 
     if (avcodec_open2(context_, codec_, NULL) < 0) {
-      XELOGE("XmaContext: Failed to reopen libav context");
+      XELOGE("XmaContext: Failed to reopen FFmpeg context");
       return 1;
     }
   }
