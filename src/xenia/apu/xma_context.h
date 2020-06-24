@@ -30,6 +30,7 @@
 
 // Forward declarations
 struct AVCodec;
+struct AVCodecParserContext;
 struct AVCodecContext;
 struct AVFrame;
 struct AVPacket;
@@ -121,14 +122,11 @@ struct XMA_CONTEXT_DATA {
 static_assert_size(XMA_CONTEXT_DATA, 64);
 
 #pragma pack(push, 1)
-struct WmaProExtraData {
-  uint16_t bits_per_sample;
-  uint32_t channel_mask;
-  uint8_t unk06[8];
-  uint16_t decode_flags;
-  uint8_t unk10[2];
+// XMA2WAVEFORMATEX
+struct Xma2ExtraData {
+  uint8_t raw[34];
 };
-static_assert_size(WmaProExtraData, 18);
+static_assert_size(Xma2ExtraData, 34);
 #pragma pack(pop)
 
 class XmaContext {
@@ -199,19 +197,19 @@ class XmaContext {
   bool is_allocated_ = false;
   bool is_enabled_ = false;
 
-  // libav structures
+  // ffmpeg structures
+  AVPacket* packet_ = nullptr;
   AVCodec* codec_ = nullptr;
+  AVCodecParserContext* parser_ = nullptr;
   AVCodecContext* context_ = nullptr;
   AVFrame* decoded_frame_ = nullptr;
-  AVPacket* packet_ = nullptr;
-  WmaProExtraData extra_data_;
 
-  bool partial_frame_saved_ = false;
-  bool partial_frame_size_known_ = false;
-  size_t partial_frame_total_size_bits_ = 0;
-  size_t partial_frame_start_offset_bits_ = 0;
-  size_t partial_frame_offset_bits_ = 0;  // blah internal don't use this
-  std::vector<uint8_t> partial_frame_buffer_;
+  //bool partial_frame_saved_ = false;
+  //bool partial_frame_size_known_ = false;
+  //size_t partial_frame_total_size_bits_ = 0;
+  //size_t partial_frame_start_offset_bits_ = 0;
+  //size_t partial_frame_offset_bits_ = 0;  // blah internal don't use this
+  //std::vector<uint8_t> partial_frame_buffer_;
 
   uint8_t* current_frame_ = nullptr;
 };

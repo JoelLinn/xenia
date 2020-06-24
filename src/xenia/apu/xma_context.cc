@@ -25,8 +25,6 @@ extern "C" {
 #include "third_party/FFmpeg/libavcodec/avcodec.h"
 #include "third_party/FFmpeg/libavcodec/wma.h"
 #pragma warning(pop)
-
-extern AVCodec ff_xma2_decoder;
 }  // extern "C"
 
 // Credits for most of this code goes to:
@@ -57,46 +55,53 @@ int XmaContext::Setup(uint32_t id, Memory* memory, uint32_t guest_ptr) {
   memory_ = memory;
   guest_ptr_ = guest_ptr;
 
-  // Allocate important stuff.
-  codec_ = &ff_xma2_decoder;
+  // Allocate ffmpeg stuff:
+  packet_ = av_packet_alloc();
+  assert_not_null(packet_);
+
+  // find the XMA2 audio decoder
+  codec_ = avcodec_find_decoder(AV_CODEC_ID_XMA2);
   if (!codec_) {
+    XELOGE("XmaContext {}: Codec not found.", id);
+    return 1;
+  }
+
+  parser_ = av_parser_init(codec_->id);
+  if (!parser_) {
+    XELOGE("XmaContext {}: Parser failed to initalize.", id);
     return 1;
   }
 
   context_ = avcodec_alloc_context3(codec_);
   if (!context_) {
+    XELOGE("XmaContext {}: Couldn't allocate context.", id);
     return 1;
   }
 
-  decoded_frame_ = av_frame_alloc();
-  if (!decoded_frame_) {
+  // This is automatically freed with the context.
+  context_->extradata = static_cast<uint8_t*>(av_malloc(sizeof(Xma2ExtraData)));
+  if (!context_->extradata) {
+    XELOGE("XmaContext {}: Couldn't allocate extra data.", id);
     return 1;
   }
-
-  packet_ = new AVPacket();
-  av_init_packet(packet_);
+  std::memset(context_->extradata, 0, sizeof(Xma2ExtraData));
+  context_->extradata_size = sizeof(Xma2ExtraData);
 
   // Initialize these to 0. They'll actually be set later.
   context_->channels = 0;
   context_->sample_rate = 0;
-  context_->block_align = kBytesPerPacket;
 
-  // Extra data passed to the decoder.
-  std::memset(&extra_data_, 0, sizeof(extra_data_));
-  extra_data_.bits_per_sample = 16;
-  extra_data_.channel_mask = AV_CH_FRONT_RIGHT;
-  extra_data_.decode_flags = 0x10D6;
-
-  context_->extradata_size = sizeof(extra_data_);
-  context_->extradata = reinterpret_cast<uint8_t*>(&extra_data_);
-
-  partial_frame_buffer_.resize(2048);
+  decoded_frame_ = av_frame_alloc();
+  if (!decoded_frame_) {
+    XELOGE("XmaContext {}: Couldn't allocate frame.", id);
+    return 1;
+  }
 
   // Current frame stuff whatever
   // samples per frame * 2 max channels * output bytes
   current_frame_ = new uint8_t[kSamplesPerFrame * kBytesPerSample * 2];
 
-  // FYI: We're purposely not opening the context here. That is done later.
+  // FYI: We're purposely not opening the codec here. That is done later.
   return 0;
 }
 
@@ -189,38 +194,6 @@ int XmaContext::GetSampleRate(int id) {
   }
   assert_always();
   return 0;
-}
-
-size_t XmaContext::SavePartial(uint8_t* packet, uint32_t frame_offset_bits,
-                               size_t frame_size_bits, bool append) {
-  uint8_t* buff = partial_frame_buffer_.data();
-
-  BitStream stream(packet, 2048 * 8);
-  stream.SetOffset(frame_offset_bits);
-
-  if (!append) {
-    // Reset the buffer.
-    // TODO: Probably not necessary.
-    std::memset(buff, 0, partial_frame_buffer_.size());
-
-    size_t copy_bits = (2048 * 8) - frame_offset_bits;
-    size_t copy_offset = stream.Copy(buff, copy_bits);
-    partial_frame_offset_bits_ = copy_bits;
-    partial_frame_start_offset_bits_ = copy_offset;
-
-    return copy_bits;
-  } else {
-    size_t copy_bits = frame_size_bits - partial_frame_offset_bits_;
-    size_t copy_offset = stream.Copy(
-        buff +
-            ((partial_frame_offset_bits_ + partial_frame_start_offset_bits_) /
-             8),
-        copy_bits);
-
-    partial_frame_offset_bits_ += copy_bits;
-
-    return copy_bits;
-  }
 }
 
 bool XmaContext::ValidFrameOffset(uint8_t* block, size_t size_bytes,
@@ -361,17 +334,21 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
                                             : (output_remaining_bytes % 1024);
 
   // Decode until we can't write any more data.
+  int i__ = 0;
+  int num_channels = data->is_stereo ? 2 : 1;
   while (output_remaining_bytes > 0) {
-    int num_channels = data->is_stereo ? 2 : 1;
     if (!data->input_buffer_0_valid && !data->input_buffer_1_valid) {
       // Out of data.
       break;
     }
 
+    #if 00000
     if (data->input_buffer_read_offset == 0) {
       // Invalid offset. Go ahead and set it.
       uint32_t offset = xma::GetPacketFrameOffset(current_input_buffer);
       if (offset == -1) {
+        return;
+          #if 0
         // No more frames.
         if (data->current_buffer == 0) {
           data->input_buffer_0_valid = 0;
@@ -387,6 +364,7 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
         if (!partial_frame_saved_) {
           return;
         }
+        #endif
       } else {
         data->input_buffer_read_offset = offset;
       }
@@ -407,7 +385,9 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       data->input_buffer_read_offset = 0;
       return;
     }
+    #endif
 
+    #if 0
     // Check if we need to save a partial frame.
     if (data->input_buffer_read_offset != 0 && !partial_frame_saved_ &&
         GetFramePacketNumber(current_input_buffer, current_input_size,
@@ -458,7 +438,9 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
         return;
       }
     }
+    #endif
 
+    #if 0
     if (partial_frame_saved_ && !partial_frame_size_known_) {
       // Append the rest of the header.
       size_t offset = SavePartial(current_input_buffer, 32, 15, true);
@@ -479,11 +461,13 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       SavePartial(current_input_buffer, 32, partial_frame_total_size_bits_,
                   true);
     }
+    #endif
 
     // Prepare the decoder. Reinitialize if any parameters have changed.
     PrepareDecoder(current_input_buffer, current_input_size, data->sample_rate,
                    num_channels);
 
+    #if 0
     bool partial = false;
     size_t bit_offset = data->input_buffer_read_offset;
     if (partial_frame_saved_) {
@@ -498,13 +482,83 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       packet_->data = current_input_buffer;
       packet_->size = (int)current_input_size;
     }
+    #endif
+    //packet_->data = current_input_buffer;
+    //packet_->size = kBytesPerPacket;
 
-    int invalid_frame = 0;  // invalid frame?
-    int got_frame = 0;      // successfully decoded a frame?
-    int frame_size = 0;
-    int len =
-        xma2_decode_frame(context_, packet_, decoded_frame_, &got_frame,
-                          &invalid_frame, &frame_size, !partial, bit_offset);
+    auto parsed = av_parser_parse2(
+        parser_, context_, &packet_->data, &packet_->size, current_input_buffer,
+        kBytesPerPacket, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+    if (parsed <= 0) {
+      XELOGE("XmaContext {}: Error parsing packet.", id());
+      // TODO bail out
+    }
+
+    current_input_buffer += parsed;
+    current_input_size -= parsed;
+
+    // Do the actual packet decoding
+    if (packet_->size) {
+      auto ret = avcodec_send_packet(context_, packet_);
+      if (ret < 0) {
+        XELOGE("XmaContext {}: Error sending packet for decoding.", id());
+        // TODO bail out
+      }
+
+      while (ret >= 0) {
+        ret = avcodec_receive_frame(context_, decoded_frame_);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+          break;  // TODO ?
+        else if (ret < 0) {
+          XELOGE("XmaContext {}: Error during decoding.", id());
+          break;  // TODO bail out
+        }
+        auto outfile = fopen(fmt::format("out{}.raw", id()).c_str(), "ab");
+        auto data_size = sizeof(float);
+        for (int i = 0; i < decoded_frame_->nb_samples; i++)
+          for (int ch = 0; ch < context_->channels; ch++)
+            fwrite(decoded_frame_->data[ch] + data_size * i, 1, data_size,
+                   outfile);
+        fclose(outfile);
+        // Successfully decoded a frame.
+        // Copy to the output buffer.
+        size_t written_bytes = 0;
+
+        // TODO !!! Write back buffer to guest. Handle single frames and subframes.
+
+        // Validity checks.
+        // assert(decoded_frame_->nb_samples <= kSamplesPerFrame);
+        assert(context_->sample_fmt == AV_SAMPLE_FMT_FLTP);
+
+        // Check the returned buffer size.
+        /*assert(av_samples_get_buffer_size(NULL, context_->channels,
+                                          decoded_frame_->nb_samples,
+                                          context_->sample_fmt, 1) ==
+               context_->channels * decoded_frame_->nb_samples * sizeof(float));
+        */
+
+        #if 0
+        // Convert the frame.
+        ConvertFrame((const uint8_t**)decoded_frame_->data, context_->channels,
+                     decoded_frame_->nb_samples, current_frame_);
+
+        assert_true(output_remaining_bytes >= kBytesPerFrame * num_channels);
+        output_rb.Write(current_frame_, kBytesPerFrame * num_channels);
+        written_bytes = kBytesPerFrame * num_channels;
+
+        output_remaining_bytes -= written_bytes;
+        data->output_buffer_write_offset = output_rb.write_offset() / 256;
+        #endif
+      }
+    }
+
+
+    
+    //int len = avcodec_send_packet(context_, packet_);
+    //int len =
+    //    xma2_decode_frame(context_, packet_, decoded_frame_, &got_frame,
+    //                      &invalid_frame, &frame_size, !partial, bit_offset);
+    #if 0
     if (!partial && len == 0) {
       // Got the last frame of a packet. Advance the read offset to the next
       // packet.
@@ -525,6 +579,7 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       } else {
         // Advance the read offset.
         packet_number++;
+        // TODO skip count for multistream
         uint8_t* packet = current_input_buffer + (packet_number * 2048);
         uint32_t first_frame_offset = xma::GetPacketFrameOffset(packet);
         if (first_frame_offset == -1) {
@@ -544,7 +599,9 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
         }
       }
     }
+    #endif
 
+    #if 0
     if (got_frame) {
       // Valid frame.
       // Check and see if we need to loop back to any spot.
@@ -554,11 +611,17 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
         data->input_buffer_read_offset = data->loop_start;
         if (data->loop_count < 255) {
           data->loop_count--;
-        }
-      } else if (!partial && len > 0) {
+        }      
+      } 
+     #if 0
+       else if (!partial && len > 0) {
         data->input_buffer_read_offset += len;
       }
-    } else if (len < 0) {
+      #endif
+    } 
+    #endif
+    #if 0
+    else if (len < 0) {
       // Did not get frame
       XELOGAPU("FFmpeg failed to decode a frame!");
       if (frame_size && frame_size != 0x7FFF) {
@@ -569,7 +632,9 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       }
       return;
     }
+    #endif
 
+    #if 0
     if (got_frame) {
       // Successfully decoded a frame.
       // Copy to the output buffer.
@@ -596,6 +661,7 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
       output_remaining_bytes -= written_bytes;
       data->output_buffer_write_offset = output_rb.write_offset() / 256;
     }
+    #endif
   }
 
   // The game will kick us again with a new output buffer later.
@@ -635,17 +701,16 @@ int XmaContext::PrepareDecoder(uint8_t* block, size_t size, int sample_rate,
 
     context_->sample_rate = sample_rate;
     context_->channels = channels;
+    #if 0
     extra_data_.channel_mask =
         channels == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
+    #endif
 
     if (avcodec_open2(context_, codec_, NULL) < 0) {
       XELOGE("XmaContext: Failed to reopen FFmpeg context");
       return 1;
     }
   }
-
-  av_frame_unref(decoded_frame_);
-
   return 0;
 }
 
