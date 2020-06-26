@@ -180,15 +180,6 @@ class XmaContext {
   bool ConvertFrame(const uint8_t** samples, int num_channels, int num_samples,
                     uint8_t* output_buffer);
 
-  int StartPacket(XMA_CONTEXT_DATA* data);
-
-  int PreparePacket(uint8_t* input, size_t seq_offset, size_t size,
-                    int sample_rate, int channels);
-  void DiscardPacket();
-
-  int DecodePacket(uint8_t* output, size_t offset, size_t size,
-                   size_t* read_bytes);
-
   Memory* memory_ = nullptr;
 
   uint32_t id_ = 0;
@@ -211,7 +202,8 @@ class XmaContext {
   //size_t partial_frame_offset_bits_ = 0;  // blah internal don't use this
   //std::vector<uint8_t> partial_frame_buffer_;
 
-  uint8_t* current_frame_ = nullptr;
+  //uint8_t* current_frame_ = nullptr;
+  std::vector<uint8_t> current_frame_ = std::vector<uint8_t>(0);
 };
 
 }  // namespace apu

@@ -45,9 +45,9 @@ XmaContext::~XmaContext() {
   if (decoded_frame_) {
     av_frame_free(&decoded_frame_);
   }
-  if (current_frame_) {
-    delete[] current_frame_;
-  }
+  //if (current_frame_) {
+  //  delete[] current_frame_;
+ // }
 }
 
 int XmaContext::Setup(uint32_t id, Memory* memory, uint32_t guest_ptr) {
@@ -99,7 +99,8 @@ int XmaContext::Setup(uint32_t id, Memory* memory, uint32_t guest_ptr) {
 
   // Current frame stuff whatever
   // samples per frame * 2 max channels * output bytes
-  current_frame_ = new uint8_t[kSamplesPerFrame * kBytesPerSample * 2];
+  //current_frame_ = new uint8_t[kSamplesPerFrame * kBytesPerSample * 2];
+  //current_frame_ = new uint8_t[20 * kSamplesPerFrame * kBytesPerSample * 2];
 
   // FYI: We're purposely not opening the codec here. That is done later.
   return 0;
@@ -333,22 +334,80 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
   output_remaining_bytes -= data->is_stereo ? (output_remaining_bytes % 2048)
                                             : (output_remaining_bytes % 1024);
 
-  // Decode until we can't write any more data.
-  int i__ = 0;
   int num_channels = data->is_stereo ? 2 : 1;
-  while (output_remaining_bytes > 0) {
+
+  // Try to write all data
+  /*while (output_remaining_bytes > 0)  {
+    if (!data->input_buffer_0_valid && !data->input_buffer_1_valid) {
+      // Out of data.
+      break;
+    }*/
+  {
+
+    // Try to write decoded data
+    if (current_frame_.size()) {
+      size_t bytes_per_subframe =
+          kBytesPerSample * context_->channels * kSamplesPerSubframe;
+      assert_true(current_frame_.size() % bytes_per_subframe == 0);
+      // size_t frames_available = current_frame_.size() / kBytesPerSample /
+      //                          context_->channels / kSamplesPerFrame;
+      size_t bytes_to_write = std::min(
+          (output_remaining_bytes / bytes_per_subframe) * bytes_per_subframe,
+          current_frame_.size());
+      assert_true(output_remaining_bytes >= bytes_to_write);
+      output_rb.Write(current_frame_.data(), bytes_to_write);
+      std::memmove(current_frame_.data(),
+                   current_frame_.data() + bytes_to_write,
+                   current_frame_.size() - bytes_to_write);
+      current_frame_.resize(current_frame_.size() - bytes_to_write);
+
+      output_remaining_bytes -= bytes_to_write;
+      data->output_buffer_write_offset = output_rb.write_offset() / 256;
+    }
+
+    //if (current_frame_.size()) {
+    //  break;
+    //}
+  }
+
+  while (!current_frame_.size()) {
     if (!data->input_buffer_0_valid && !data->input_buffer_1_valid) {
       // Out of data.
       break;
     }
 
-    #if 00000
-    if (data->input_buffer_read_offset == 0) {
+    //static size_t packet_number = 0;
+
+    size_t packet_number =
+        GetFramePacketNumber(current_input_buffer, current_input_size,
+                             data->input_buffer_read_offset);
+
+    assert_true(packet_number * kBytesPerPacket < current_input_size);
+
+    // Prepare the decoder. Reinitialize if any parameters have changed.
+    PrepareDecoder(current_input_buffer, current_input_size, data->sample_rate,
+                   num_channels);
+
+    // packet_->data = current_input_buffer;
+    // packet_->size = kBytesPerPacket;
+
+    
+    auto parsed = av_parser_parse2(
+        parser_, context_, &packet_->data, &packet_->size, current_input_buffer + packet_number * kBytesPerPacket,
+        kBytesPerPacket, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+    if (parsed <= 0) {
+      XELOGE("XmaContext {}: Error parsing packet.", id());
+      // TODO bail out
+    }
+    //packet_->data = current_input_buffer;
+    //packet_->size = kBytesPerPacket;
+    //int parsed = kBytesPerPacket;
+
+    /*if (data->input_buffer_read_offset == 0)*/ {
       // Invalid offset. Go ahead and set it.
+        #if 1
       uint32_t offset = xma::GetPacketFrameOffset(current_input_buffer);
       if (offset == -1) {
-        return;
-          #if 0
         // No more frames.
         if (data->current_buffer == 0) {
           data->input_buffer_0_valid = 0;
@@ -359,143 +418,17 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
           data->input_buffer_read_offset = 0;
           data->current_buffer--;
         }
-
-        // Die if we have no partial saved.
-        if (!partial_frame_saved_) {
-          return;
-        }
-        #endif
       } else {
-        data->input_buffer_read_offset = offset;
+        //data->input_buffer_read_offset += decoded_frame_->nb_samples / 128;
+        packet_number++;
+        data->input_buffer_read_offset = packet_number * kBytesPerPacket * 8;//        +
+            //xma::GetPacketFrameOffset(current_input_buffer + packet_number * kBytesPerPacket);
       }
+      #endif
     }
 
-    if (!ValidFrameOffset(current_input_buffer, current_input_size,
-                          data->input_buffer_read_offset)) {
-      XELOGAPU("XmaContext {}: Invalid read offset {}!", id(),
-               data->input_buffer_read_offset);
-      if (data->current_buffer == 0) {
-        data->current_buffer = 1;
-        data->input_buffer_0_valid = 0;
-      } else if (data->current_buffer == 1) {
-        data->current_buffer = 0;
-        data->input_buffer_1_valid = 0;
-      }
-
-      data->input_buffer_read_offset = 0;
-      return;
-    }
-    #endif
-
-    #if 0
-    // Check if we need to save a partial frame.
-    if (data->input_buffer_read_offset != 0 && !partial_frame_saved_ &&
-        GetFramePacketNumber(current_input_buffer, current_input_size,
-                             data->input_buffer_read_offset) ==
-            current_input_packet_count - 1) {
-      BitStream stream(current_input_buffer, current_input_size * 8);
-      stream.SetOffset(data->input_buffer_read_offset);
-
-      if (stream.BitsRemaining() >= 15) {
-        uint64_t frame_size = stream.Read(15);
-        if (data->input_buffer_read_offset + frame_size >=
-                current_input_size * 8 &&
-            frame_size != 0x7FFF) {
-          uint32_t rel_offset = data->input_buffer_read_offset % (2048 * 8);
-
-          // Frame is cut off! Save and exit.
-          partial_frame_saved_ = true;
-          partial_frame_size_known_ = true;
-          partial_frame_total_size_bits_ = frame_size;
-          SavePartial(
-              current_input_buffer + (current_input_packet_count - 1) * 2048,
-              rel_offset, frame_size, false);
-        }
-      } else {
-        // Header cut in half :/
-        uint32_t rel_offset = data->input_buffer_read_offset % (2048 * 8);
-
-        partial_frame_saved_ = true;
-        partial_frame_size_known_ = false;
-        SavePartial(
-            current_input_buffer + (current_input_packet_count - 1) * 2048,
-            rel_offset, 0, false);
-      }
-
-      if (partial_frame_saved_) {
-        XELOGAPU("XmaContext {}: saved a partial frame", id());
-
-        if (data->current_buffer == 0) {
-          data->input_buffer_0_valid = 0;
-          data->input_buffer_read_offset = 0;
-          data->current_buffer++;
-        } else if (data->current_buffer == 1) {
-          data->input_buffer_1_valid = 0;
-          data->input_buffer_read_offset = 0;
-          data->current_buffer--;
-        }
-
-        return;
-      }
-    }
-    #endif
-
-    #if 0
-    if (partial_frame_saved_ && !partial_frame_size_known_) {
-      // Append the rest of the header.
-      size_t offset = SavePartial(current_input_buffer, 32, 15, true);
-
-      // Read the frame size.
-      BitStream stream(partial_frame_buffer_.data(),
-                       15 + partial_frame_start_offset_bits_);
-      stream.SetOffset(partial_frame_start_offset_bits_);
-
-      uint64_t size = stream.Read(15);
-      partial_frame_size_known_ = true;
-      partial_frame_total_size_bits_ = size;
-
-      // Now append the rest of the frame.
-      SavePartial(current_input_buffer, 32 + (uint32_t)offset, size, true);
-    } else if (partial_frame_saved_) {
-      // Append the rest of the frame.
-      SavePartial(current_input_buffer, 32, partial_frame_total_size_bits_,
-                  true);
-    }
-    #endif
-
-    // Prepare the decoder. Reinitialize if any parameters have changed.
-    PrepareDecoder(current_input_buffer, current_input_size, data->sample_rate,
-                   num_channels);
-
-    #if 0
-    bool partial = false;
-    size_t bit_offset = data->input_buffer_read_offset;
-    if (partial_frame_saved_) {
-      XELOGAPU("XmaContext {}: processing saved partial frame", id());
-      packet_->data = partial_frame_buffer_.data();
-      packet_->size = (int)partial_frame_buffer_.size();
-
-      bit_offset = partial_frame_start_offset_bits_;
-      partial = true;
-      partial_frame_saved_ = false;
-    } else {
-      packet_->data = current_input_buffer;
-      packet_->size = (int)current_input_size;
-    }
-    #endif
-    //packet_->data = current_input_buffer;
-    //packet_->size = kBytesPerPacket;
-
-    auto parsed = av_parser_parse2(
-        parser_, context_, &packet_->data, &packet_->size, current_input_buffer,
-        kBytesPerPacket, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
-    if (parsed <= 0) {
-      XELOGE("XmaContext {}: Error parsing packet.", id());
-      // TODO bail out
-    }
-
-    current_input_buffer += parsed;
-    current_input_size -= parsed;
+    //current_input_buffer += parsed;
+    //current_input_size -= parsed;
 
     // Do the actual packet decoding
     if (packet_->size) {
@@ -504,6 +437,7 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
         XELOGE("XmaContext {}: Error sending packet for decoding.", id());
         // TODO bail out
       }
+      packet_number++;
 
       while (ret >= 0) {
         ret = avcodec_receive_frame(context_, decoded_frame_);
@@ -513,6 +447,7 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
           XELOGE("XmaContext {}: Error during decoding.", id());
           break;  // TODO bail out
         }
+        //data->input_buffer_read_offset += decoded_frame_->nb_samples / 128;
         auto outfile = fopen(fmt::format("out{}.raw", id()).c_str(), "ab");
         auto data_size = sizeof(float);
         for (int i = 0; i < decoded_frame_->nb_samples; i++)
@@ -524,7 +459,8 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
         // Copy to the output buffer.
         size_t written_bytes = 0;
 
-        // TODO !!! Write back buffer to guest. Handle single frames and subframes.
+        // TODO !!! Write back buffer to guest. Handle single frames and
+        // subframes.
 
         // Validity checks.
         // assert(decoded_frame_->nb_samples <= kSamplesPerFrame);
@@ -537,132 +473,35 @@ void XmaContext::DecodePackets(XMA_CONTEXT_DATA* data) {
                context_->channels * decoded_frame_->nb_samples * sizeof(float));
         */
 
-        #if 0
+#if 1
+        assert_true(current_frame_.size() == 0);
+        size_t raw_count =
+            decoded_frame_->nb_samples * kBytesPerSample * num_channels;
+        current_frame_.resize(raw_count);
         // Convert the frame.
-        ConvertFrame((const uint8_t**)decoded_frame_->data, context_->channels,
-                     decoded_frame_->nb_samples, current_frame_);
+        ConvertFrame((const uint8_t**)decoded_frame_->data, num_channels,
+                     decoded_frame_->nb_samples, current_frame_.data());
 
-        assert_true(output_remaining_bytes >= kBytesPerFrame * num_channels);
-        output_rb.Write(current_frame_, kBytesPerFrame * num_channels);
-        written_bytes = kBytesPerFrame * num_channels;
-
-        output_remaining_bytes -= written_bytes;
-        data->output_buffer_write_offset = output_rb.write_offset() / 256;
-        #endif
+        //assert_true(output_remaining_bytes >= kBytesPerFrame * num_channels);
+#endif
       }
     }
 
-
-    
-    //int len = avcodec_send_packet(context_, packet_);
-    //int len =
-    //    xma2_decode_frame(context_, packet_, decoded_frame_, &got_frame,
-    //                      &invalid_frame, &frame_size, !partial, bit_offset);
-    #if 0
-    if (!partial && len == 0) {
-      // Got the last frame of a packet. Advance the read offset to the next
-      // packet.
-      uint32_t packet_number =
-          GetFramePacketNumber(current_input_buffer, current_input_size,
-                               data->input_buffer_read_offset);
-      if (packet_number == current_input_packet_count - 1) {
-        // Last packet.
-        if (data->current_buffer == 0) {
-          data->input_buffer_0_valid = 0;
-          data->input_buffer_read_offset = 0;
-          data->current_buffer = 1;
-        } else if (data->current_buffer == 1) {
-          data->input_buffer_1_valid = 0;
-          data->input_buffer_read_offset = 0;
-          data->current_buffer = 0;
-        }
-      } else {
-        // Advance the read offset.
-        packet_number++;
-        // TODO skip count for multistream
-        uint8_t* packet = current_input_buffer + (packet_number * 2048);
-        uint32_t first_frame_offset = xma::GetPacketFrameOffset(packet);
-        if (first_frame_offset == -1) {
-          // Invalid packet (only contained a frame partial). Out of input.
-          if (data->current_buffer == 0) {
-            data->input_buffer_0_valid = 0;
-            data->current_buffer = 1;
-          } else if (data->current_buffer == 1) {
-            data->input_buffer_1_valid = 0;
-            data->current_buffer = 0;
-          }
-
-          data->input_buffer_read_offset = 0;
-        } else {
-          data->input_buffer_read_offset =
-              packet_number * 2048 * 8 + first_frame_offset;
-        }
-      }
-    }
-    #endif
-
-    #if 0
-    if (got_frame) {
-      // Valid frame.
-      // Check and see if we need to loop back to any spot.
-      if (data->loop_count > 0 &&
-          data->input_buffer_read_offset == data->loop_end) {
-        // Loop back to the beginning.
-        data->input_buffer_read_offset = data->loop_start;
-        if (data->loop_count < 255) {
-          data->loop_count--;
-        }      
-      } 
-     #if 0
-       else if (!partial && len > 0) {
-        data->input_buffer_read_offset += len;
-      }
-      #endif
-    } 
-    #endif
-    #if 0
-    else if (len < 0) {
-      // Did not get frame
-      XELOGAPU("FFmpeg failed to decode a frame!");
-      if (frame_size && frame_size != 0x7FFF) {
-        data->input_buffer_read_offset += frame_size;
-      } else {
+    if (packet_number * kBytesPerPacket >= current_input_size) {
+      if (data->current_buffer == 0) {
         data->input_buffer_0_valid = 0;
+        data->input_buffer_read_offset = 0;
+        data->current_buffer++;
+      } else if (data->current_buffer == 1) {
         data->input_buffer_1_valid = 0;
+        data->input_buffer_read_offset = 0;
+        data->current_buffer--;
       }
-      return;
     }
-    #endif
-
-    #if 0
-    if (got_frame) {
-      // Successfully decoded a frame.
-      // Copy to the output buffer.
-      size_t written_bytes = 0;
-
-      // Validity checks.
-      assert(decoded_frame_->nb_samples <= kSamplesPerFrame);
-      assert(context_->sample_fmt == AV_SAMPLE_FMT_FLTP);
-
-      // Check the returned buffer size.
-      assert(av_samples_get_buffer_size(NULL, context_->channels,
-                                        decoded_frame_->nb_samples,
-                                        context_->sample_fmt, 1) ==
-             context_->channels * decoded_frame_->nb_samples * sizeof(float));
-
-      // Convert the frame.
-      ConvertFrame((const uint8_t**)decoded_frame_->data, context_->channels,
-                   decoded_frame_->nb_samples, current_frame_);
-
-      assert_true(output_remaining_bytes >= kBytesPerFrame * num_channels);
-      output_rb.Write(current_frame_, kBytesPerFrame * num_channels);
-      written_bytes = kBytesPerFrame * num_channels;
-
-      output_remaining_bytes -= written_bytes;
-      data->output_buffer_write_offset = output_rb.write_offset() / 256;
-    }
-    #endif
   }
+
+
+ 
 
   // The game will kick us again with a new output buffer later.
   // It's important that we only invalidate this if we actually wrote to it!!
