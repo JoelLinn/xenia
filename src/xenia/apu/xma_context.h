@@ -10,10 +10,11 @@
 #ifndef XENIA_APU_XMA_CONTEXT_H_
 #define XENIA_APU_XMA_CONTEXT_H_
 
+#include <array>
 #include <atomic>
 #include <mutex>
 #include <queue>
-#include <vector>
+//#include <vector>
 
 #include "xenia/memory.h"
 #include "xenia/xbox.h"
@@ -136,12 +137,12 @@ class XmaContext {
   static const uint32_t kBytesPerSample = 2;
   static const uint32_t kSamplesPerFrame = 512;
   static const uint32_t kSamplesPerSubframe = 128;
-  static const uint32_t kBytesPerFrame = kSamplesPerFrame * kBytesPerSample;
-  static const uint32_t kBytesPerSubframe =
+  static const uint32_t kBytesPerFrameChannel = kSamplesPerFrame * kBytesPerSample;
+  static const uint32_t kBytesPerSubframeChannel =
       kSamplesPerSubframe * kBytesPerSample;
 
-  static const uint32_t kOutputBytesPerBlock = 256;
-  static const uint32_t kOutputMaxSizeBytes = 31 * kOutputBytesPerBlock;
+  //static const uint32_t kOutputBytesPerBlock = 256;
+  //static const uint32_t kOutputMaxSizeBytes = 31 * kOutputBytesPerBlock;
 
   explicit XmaContext();
   ~XmaContext();
@@ -167,18 +168,28 @@ class XmaContext {
 
  private:
   static int GetSampleRate(int id);
+  // Get the offset of the next frame. Does not traverse packets.
+  static size_t GetNextFrame(uint8_t* block, size_t size, size_t bit_offset);
+  // Get the containing packet number of the frame pointed to by the offset.
+  static int GetFramePacketNumber(uint8_t* block, size_t size,
+                                  size_t bit_offset);
+  // Get the packet number and the index of the frame inside that packet
+  static std::tuple<int, int> GetFrameNumber(uint8_t* block, size_t size,
+                                    size_t bit_offset);
+  // Get the number of frames contained in the packet (including truncated) and if the last frame is split.
+  static std::tuple<int, bool> GetPacketFrameCount(uint8_t* packet);
 
-  size_t SavePartial(uint8_t* packet, uint32_t frame_offset_bits,
-                     size_t frame_size_bits, bool append);
+  // Convert sample format and swap bytes
+  static bool ConvertFrame(const uint8_t** samples, int num_channels,
+                           int num_samples, int offset_samples, uint8_t* output_buffer);
+
   bool ValidFrameOffset(uint8_t* block, size_t size_bytes,
                         size_t frame_offset_bits);
-  void DecodePackets(XMA_CONTEXT_DATA* data);
-  uint32_t GetFramePacketNumber(uint8_t* block, size_t size, size_t bit_offset);
-  int PrepareDecoder(uint8_t* block, size_t size, int sample_rate,
+  void Decode(XMA_CONTEXT_DATA* data);
+  int DecodePacket();
+  int PrepareDecoder(uint8_t* packet, int sample_rate,
                      int channels);
 
-  bool ConvertFrame(const uint8_t** samples, int num_channels, int num_samples,
-                    uint8_t* output_buffer);
 
   Memory* memory_ = nullptr;
 
@@ -187,13 +198,20 @@ class XmaContext {
   std::mutex lock_;
   bool is_allocated_ = false;
   bool is_enabled_ = false;
+  bool is_dirty_ = true;
 
   // ffmpeg structures
   AVPacket* packet_ = nullptr;
   AVCodec* codec_ = nullptr;
   AVCodecParserContext* parser_ = nullptr;
   AVCodecContext* context_ = nullptr;
+  AVFrame* temp_frame_ = nullptr;
   AVFrame* decoded_frame_ = nullptr;
+  // if it contains the last frame from the previous packet
+  bool decoded_has_overlap_ = false;
+  uint32_t decoded_idx = 0;
+  //uint32_t decoded_consumed_samples_ = 0; // TODO do this dynamically
+  //int decoded_idx_ = -1;
 
   //bool partial_frame_saved_ = false;
   //bool partial_frame_size_known_ = false;
@@ -203,7 +221,9 @@ class XmaContext {
   //std::vector<uint8_t> partial_frame_buffer_;
 
   //uint8_t* current_frame_ = nullptr;
-  std::vector<uint8_t> current_frame_ = std::vector<uint8_t>(0);
+  // conversion buffer for 2 channel frame
+  std::array<uint8_t, kBytesPerFrameChannel * 2> current_frame_;
+  //std::vector<uint8_t> current_frame_ = std::vector<uint8_t>(0);
 };
 
 }  // namespace apu
