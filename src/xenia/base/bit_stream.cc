@@ -111,6 +111,8 @@ size_t BitStream::Copy(uint8_t* dest_buffer, size_t num_bits) {
   // First: Copy the first few bits up to a byte boundary.
   if (rel_offset_bits) {
     uint64_t bits = Peek(8 - rel_offset_bits);
+    uint8_t clear_mask = ~((1 << rel_offset_bits) - 1);
+    dest_buffer[out_offset_bytes] &= clear_mask;
     dest_buffer[out_offset_bytes] |= (uint8_t)bits;
 
     bits_left -= 8 - rel_offset_bits;
@@ -131,7 +133,9 @@ size_t BitStream::Copy(uint8_t* dest_buffer, size_t num_bits) {
   if (bits_left) {
     uint64_t bits = Peek(bits_left);
     bits <<= 8 - bits_left;
-
+    
+    uint8_t clear_mask = ((1 << bits_left) - 1);
+    dest_buffer[out_offset_bytes] &= clear_mask;
     dest_buffer[out_offset_bytes] |= (uint8_t)bits;
     Advance(bits_left);
   }

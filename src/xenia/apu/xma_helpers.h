@@ -17,6 +17,8 @@
 namespace xe {
 namespace apu {
 namespace xma {
+    
+static const uint32_t kMaxFrameLength = 0x7FFF;
 
 // Get number of frames that /begin/ in this packet.
 uint32_t GetPacketFrameCount(uint8_t* packet) {
@@ -27,11 +29,12 @@ uint32_t GetPacketFrameCount(uint8_t* packet) {
 uint32_t GetPacketFrameOffset(uint8_t* packet) {
   uint32_t val = (uint16_t)(((packet[0] & 0x3) << 13) | (packet[1] << 5) |
                             (packet[2] >> 3));
-  if (val == 0x7FFF) {
-    return -1;
-  } else {
+  //if (val > 16351) {
+  //  // There is no data in this packet
+  //  return -1;
+  //} else {
     return val + 32;
-  }
+  //}
 }
 
 uint32_t GetPacketMetadata(uint8_t* packet) {

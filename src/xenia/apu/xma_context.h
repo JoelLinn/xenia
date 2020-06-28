@@ -167,6 +167,8 @@ class XmaContext {
   void set_is_enabled(bool is_enabled) { is_enabled_ = is_enabled; }
 
  private:
+  static void SwapInputBuffer(XMA_CONTEXT_DATA * data);
+  static void NextPacket(XMA_CONTEXT_DATA* data);
   static int GetSampleRate(int id);
   // Get the offset of the next frame. Does not traverse packets.
   static size_t GetNextFrame(uint8_t* block, size_t size, size_t bit_offset);
@@ -181,12 +183,11 @@ class XmaContext {
 
   // Convert sample format and swap bytes
   static bool ConvertFrame(const uint8_t** samples, int num_channels,
-                           int num_samples, int offset_samples, uint8_t* output_buffer);
+                           int num_samples, uint8_t* output_buffer);
 
   bool ValidFrameOffset(uint8_t* block, size_t size_bytes,
                         size_t frame_offset_bits);
   void Decode(XMA_CONTEXT_DATA* data);
-  int DecodePacket();
   int PrepareDecoder(uint8_t* packet, int sample_rate,
                      int channels);
 
@@ -198,18 +199,13 @@ class XmaContext {
   std::mutex lock_;
   bool is_allocated_ = false;
   bool is_enabled_ = false;
-  bool is_dirty_ = true;
+  //bool is_dirty_ = true;
 
   // ffmpeg structures
-  AVPacket* packet_ = nullptr;
-  AVCodec* codec_ = nullptr;
-  AVCodecParserContext* parser_ = nullptr;
-  AVCodecContext* context_ = nullptr;
-  AVFrame* temp_frame_ = nullptr;
-  AVFrame* decoded_frame_ = nullptr;
-  // if it contains the last frame from the previous packet
-  bool decoded_has_overlap_ = false;
-  uint32_t decoded_idx = 0;
+  AVPacket* av_packet_ = nullptr;
+  AVCodec* av_codec_ = nullptr;
+  AVCodecContext* av_context_ = nullptr;
+  AVFrame* av_frame_ = nullptr;
   //uint32_t decoded_consumed_samples_ = 0; // TODO do this dynamically
   //int decoded_idx_ = -1;
 
@@ -219,10 +215,18 @@ class XmaContext {
   //size_t partial_frame_start_offset_bits_ = 0;
   //size_t partial_frame_offset_bits_ = 0;  // blah internal don't use this
   //std::vector<uint8_t> partial_frame_buffer_;
+  uint32_t packets_skip_ = 0;
+
+  //bool split_frame_pending_ = false;
+  uint32_t split_frame_len_ = 0;
+  uint32_t split_frame_len_partial_ = 0;
+  // first byte contains bit offset information
+  std::array<uint8_t, 1 + 4096> xma_frame_;
+
 
   //uint8_t* current_frame_ = nullptr;
   // conversion buffer for 2 channel frame
-  std::array<uint8_t, kBytesPerFrameChannel * 2> current_frame_;
+  std::array<uint8_t, kBytesPerFrameChannel * 2> raw_frame_;
   //std::vector<uint8_t> current_frame_ = std::vector<uint8_t>(0);
 };
 
