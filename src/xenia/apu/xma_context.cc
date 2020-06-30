@@ -20,11 +20,14 @@
 #include "xenia/base/ring_buffer.h"
 
 extern "C" {
+#if XE_COMPILER_MSVC
 #pragma warning(push)
 #pragma warning(disable : 4101 4244 5033)
+#endif
 #include "third_party/FFmpeg/libavcodec/avcodec.h"
-#include "third_party/FFmpeg/libavcodec/wma.h"
+#if XE_COMPILER_MSVC
 #pragma warning(pop)
+#endif
 }  // extern "C"
 
 // Credits for most of this code goes to:
@@ -175,7 +178,7 @@ void XmaContext::SwapInputBuffer(XMA_CONTEXT_DATA * data) {
 
 /*void XmaContext::NextPacket(
     uint8_t* input_buffer,
-    uint32_t input_size, 
+    uint32_t input_size,
     uint32_t input_buffer_read_offset) {*/
 void XmaContext::NextPacket(XMA_CONTEXT_DATA * data) {
   //auto packet_idx = GetFramePacketNumber(input_buffer, input_size , input_buffer_read_offset);
