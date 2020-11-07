@@ -40,7 +40,13 @@ void* AllocFixed(void* base_address, size_t length,
                  AllocationType allocation_type, PageAccess access) {
   // mmap does not support reserve / commit, so ignore allocation_type.
   uint32_t prot = ToPosixProtectFlags(access);
-  return mmap(base_address, length, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void* result = mmap(base_address, length, prot,
+                      MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
+  if (result == MAP_FAILED) {
+    return nullptr;
+  } else {
+    return result;
+  }
 }
 
 bool DeallocFixed(void* base_address, size_t length,
@@ -82,7 +88,8 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path,
   }
 
   oflag |= O_CREAT;
-  int ret = shm_open(path.c_str(), oflag, 0777);
+  auto full_path = "/" / path;
+  int ret = shm_open(full_path.c_str(), oflag, 0777);
   if (ret > 0) {
     ftruncate64(ret, length);
   }
@@ -90,8 +97,10 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path,
   return ret <= 0 ? nullptr : reinterpret_cast<FileMappingHandle>(ret);
 }
 
-void CloseFileMappingHandle(FileMappingHandle handle) {
-  close((intptr_t)handle);
+void CloseFileMappingHandle(FileMappingHandle handle,
+                            const std::filesystem::path& path) {
+  auto full_path = "/" / path;
+  shm_unlink(full_path.c_str());
 }
 
 void* MapFileView(FileMappingHandle handle, void* base_address, size_t length,
