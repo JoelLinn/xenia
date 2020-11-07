@@ -38,7 +38,7 @@ VulkanGraphicsSystem::CreateCommandProcessor() {
 }
 
 void VulkanGraphicsSystem::Swap(xe::ui::UIEvent* e) {
-  if (!command_processor_) {
+  if (!command_processor_ || !display_context_) {
     return;
   }
 
