@@ -27,6 +27,9 @@
 #include <android/native_window.h>
 #elif XE_PLATFORM_WIN32
 #include "xenia/base/platform_win.h"
+#elif XE_PLATFORM_LINUX
+#include <X11/Xlib-xcb.h>
+#include "xenia/ui/window_gtk.h"
 #endif
 
 namespace xe {
@@ -258,6 +261,29 @@ bool VulkanContext::BeginSwap() {
             reinterpret_cast<HWND>(target_window_->native_handle());
         surface_create_result = ifn.vkCreateWin32SurfaceKHR(
             instance, &surface_create_info, nullptr, &swap_surface_);
+#elif XE_PLATFORM_LINUX
+#ifdef GDK_WINDOWING_X11
+        GtkWidget* window_handle =
+            static_cast<GtkWidget*>(target_window_->native_handle());
+        GdkDisplay* gdk_display = gtk_widget_get_display(window_handle);
+        assert(GDK_IS_X11_DISPLAY(gdk_display));
+        xcb_connection_t* connection =
+            XGetXCBConnection(gdk_x11_display_get_xdisplay(gdk_display));
+        dynamic_cast<GTKWindow*>(target_window_)->native_window_handle();
+        xcb_window_t window =
+            gdk_x11_window_get_xid(gtk_widget_get_window(window_handle));
+        VkXcbSurfaceCreateInfoKHR create_info;
+        create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+        create_info.pNext = nullptr;
+        create_info.flags = 0;
+        create_info.connection = static_cast<xcb_connection_t*>(
+            target_window_->native_platform_handle());
+        create_info.window = static_cast<xcb_window_t>(window);
+        surface_create_result = ifn.vkCreateXcbSurfaceKHR(
+            instance, &create_info, nullptr, &swap_surface_);
+#else
+#error Unsupported GDK Backend on Linux.
+#endif  // GDK_WINDOWING_X11
 #else
 #error No Vulkan surface creation for the target platform.
 #endif

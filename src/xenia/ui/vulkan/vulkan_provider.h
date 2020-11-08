@@ -26,6 +26,10 @@
 #ifndef VK_USE_PLATFORM_WIN32_KHR
 #define VK_USE_PLATFORM_WIN32_KHR 1
 #endif
+#elif XE_PLATFORM_LINUX
+#ifndef VK_USE_PLATFORM_XCB_KHR
+#define VK_USE_PLATFORM_XCB_KHR
+#endif
 #endif
 
 #ifndef VK_NO_PROTOTYPES
@@ -89,6 +93,8 @@ class VulkanProvider : public GraphicsProvider {
     PFN_vkCreateAndroidSurfaceKHR vkCreateAndroidSurfaceKHR;
 #elif XE_PLATFORM_WIN32
     PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR;
+#elif XE_PLATFORM_LINUX
+    PFN_vkCreateXcbSurfaceKHR vkCreateXcbSurfaceKHR;
 #endif
   };
   const InstanceFunctions& ifn() const { return ifn_; }

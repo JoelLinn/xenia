@@ -156,6 +156,8 @@ bool VulkanProvider::Initialize() {
   instance_extensions_enabled.push_back("VK_KHR_android_surface");
 #elif XE_PLATFORM_WIN32
   instance_extensions_enabled.push_back("VK_KHR_win32_surface");
+#elif XE_PLATFORM_LINUX
+  instance_extensions_enabled.push_back("VK_KHR_xcb_surface");
 #endif
   VkApplicationInfo application_info;
   application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -228,6 +230,8 @@ bool VulkanProvider::Initialize() {
   XE_VULKAN_LOAD_IFN(vkCreateAndroidSurfaceKHR);
 #elif XE_PLATFORM_WIN32
   XE_VULKAN_LOAD_IFN(vkCreateWin32SurfaceKHR);
+#elif XE_PLATFORM_LINUX
+  XE_VULKAN_LOAD_IFN(vkCreateXcbSurfaceKHR);
 #endif
 #undef XE_VULKAN_LOAD_IFN
   if (!instance_functions_loaded) {
