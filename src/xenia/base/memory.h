@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <string_view>
 
 #include "xenia/base/assert.h"
 #include "xenia/base/byte_order.h"
@@ -440,6 +441,106 @@ inline void store_and_swap<std::u16string>(void* mem,
                                            const std::u16string& value) {
   return store_and_swap<std::u16string_view>(mem, value);
 }
+
+struct fourcc_t {
+  constexpr fourcc_t(char a, char b, char c, char d) {
+    // Store in big endian order
+    memory[0] = a;
+    memory[1] = b;
+    memory[2] = c;
+    memory[3] = d;
+  }
+
+  constexpr fourcc_t(const std::string_view fourcc) {
+    // allow values like "XEN\0"
+    if (fourcc.length() == 0 || fourcc.length() > 4) {
+      throw;
+    }
+    uint_fast8_t count = std::min(static_cast<uint_fast8_t>(fourcc.length()), uint_fast8_t(4));
+    for (uint_fast8_t i = 0; i < count; i++) {
+      memory[i] = fourcc[i];
+    }
+  }
+
+  static fourcc_t from_be(uint32_t value_be) {
+    fourcc_t fourcc;
+    fourcc.value_be = value_be;
+    return fourcc;
+  }
+
+  static fourcc_t from_le(uint32_t value_le) {
+    fourcc_t fourcc;
+    fourcc.value_be = byte_swap(value_le);
+    return fourcc;
+  }
+
+  static fourcc_t from_host(uint32_t value_host) {
+#if __cpp_lib_endian
+    static_assert((std::endian::native == std::endian::big) ||
+                  (std::endian::native == std::endian::little));
+    if constexpr (std::endian::native == std::endian::big) {
+      return from_be(value_host);
+    } else if constexpr (std::endian::native == std::endian::little) {
+      return from_le(value_host);
+    }
+#else
+    return fourcc_t(static_cast<char>((value_host >> 24) & 0xFF),
+                    static_cast<char>((value_host >> 16) & 0xFF),
+                    static_cast<char>((value_host >> 8) & 0xFF),
+                    static_cast<char>(value_host & 0xFF));
+#endif
+  }
+
+  constexpr bool operator==(fourcc_t b) const {
+    return value_be == b.value_be;
+  }
+
+  constexpr bool operator!=(fourcc_t b) const {
+    return value_be != b.value_be;
+  }
+
+  // Get FourCC in big endian, regardless of host byte-order.
+  // Equal to calling host() on a big endian system.
+  constexpr uint32_t be() const { return value_be; }
+
+  // Get FourCC in little endian, regardless of host byte-order.
+  // Equal to calling host() on a little endian system.
+  constexpr uint32_t le() const {
+    // TODO(JoelLinn): constexpr byte_swap
+    fourcc_t le(memory[3], memory[2], memory[1], memory[0]);
+    return le.value_be;
+  }
+
+  // Get FourCC in host byte order. Memory representation depends on host
+  // endianness. It always applies:
+  // fourcc_t('1', '2', '3', '4').host() == '1234' == 0x31323334
+  constexpr uint32_t host() const {
+#if __cpp_lib_endian
+    static_assert((std::endian::native == std::endian::big) ||
+                  (std::endian::native == std::endian::little));
+    if constexpr (std::endian::native == std::endian::big) {
+      return be();
+    } else if constexpr (std::endian::native == std::endian::little) {
+      return le();
+    }
+#else
+    return (static_cast<uint32_t>(memory[0]) << 24) |
+           (static_cast<uint32_t>(memory[1]) << 16) |
+           (static_cast<uint32_t>(memory[2]) << 8) |
+           (static_cast<uint32_t>(memory[3]));
+#endif
+  }
+
+ protected:
+  constexpr fourcc_t() = default;
+
+ protected:
+  // FourCC value in big endian order:
+  union {
+    uint32_t value_be;
+    char memory[4] = {};
+  };
+};
 
 }  // namespace xe
 
