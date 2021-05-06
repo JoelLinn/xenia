@@ -469,6 +469,64 @@ TEST_CASE("read_write_view", "Virtual Memory Mapping") {
   xe::memory::CloseFileMappingHandle(memory, path);
 }
 
+TEST_CASE("construct_and_compare", "FourCC") {
+  {
+    const uint32_t fourcc_host = 0x31323334;
+    constexpr fourcc_t fourcc_1('1', '2', '3', '4');
+    constexpr fourcc_t fourcc_2("1234");
+    REQUIRE(fourcc_1.host() == fourcc_host);
+    REQUIRE(fourcc_2.host() == fourcc_host);
+    REQUIRE(fourcc_1 == fourcc_2);
+    REQUIRE(fourcc_2 == fourcc_1);
+  }
+
+  {
+    const uint32_t fourcc_host = 0x41420000;
+    constexpr fourcc_t fourcc_1('A', 'B', '\0', '\0');
+    constexpr fourcc_t fourcc_2("AB\0\0");
+    constexpr fourcc_t fourcc_3("AB");
+    REQUIRE(fourcc_1.host() == fourcc_host);
+    REQUIRE(fourcc_2.host() == fourcc_host);
+    REQUIRE(fourcc_3.host() == fourcc_host);
+    REQUIRE(fourcc_1 == fourcc_2);
+    REQUIRE(fourcc_1 == fourcc_3);
+    REQUIRE(fourcc_2 == fourcc_3);
+  }
+
+  {
+    const uint32_t fourcc_host = 0x00000000;
+    constexpr fourcc_t fourcc_1(0, 0, 0, 0);
+    REQUIRE(fourcc_1.host() == fourcc_host);
+  }
+}
+
+TEST_CASE("to_xx", "FourCC") {
+  const uint32_t fourcc_host = 0x31323334;
+  const uint32_t fourcc_be = load<uint32_t>("1234");
+  const uint32_t fourcc_le = load<uint32_t>("4321");
+
+  constexpr fourcc_t fourcc("1234");
+  REQUIRE(fourcc.host() == fourcc_host);
+  REQUIRE(fourcc.be() == fourcc_be);
+  REQUIRE(fourcc.le() == fourcc_le);
+}
+
+TEST_CASE("from_xx", "FourCC") {
+  const uint32_t fourcc_host = 0x31323334;
+  const uint32_t fourcc_be = load<uint32_t>("1234");
+  const uint32_t fourcc_le = load<uint32_t>("4321");
+
+  const fourcc_t fourcc_1 = fourcc_t::from_host(fourcc_host);
+  const fourcc_t fourcc_2 = fourcc_t::from_be(fourcc_be);
+  const fourcc_t fourcc_3 = fourcc_t::from_le(fourcc_le);
+  REQUIRE(fourcc_1.host() == fourcc_host);
+  REQUIRE(fourcc_2.host() == fourcc_host);
+  REQUIRE(fourcc_3.host() == fourcc_host);
+  REQUIRE(fourcc_1 == fourcc_2);
+  REQUIRE(fourcc_1 == fourcc_3);
+  REQUIRE(fourcc_2 == fourcc_3);
+}
+
 }  // namespace test
 }  // namespace base
 }  // namespace xe
