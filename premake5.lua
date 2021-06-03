@@ -45,6 +45,12 @@ flags({
   "FatalWarnings",        -- Treat warnings as errors.
 })
 
+-- Required in all places where xbyak is included
+defines({
+  "XBYAK_NO_OP_NAMES",
+  "XBYAK_ENABLE_OMITTED_OPERAND",
+})
+
 filter("kind:StaticLib")
   defines({
     "_LIB",
@@ -161,10 +167,6 @@ filter("platforms:Windows")
     "/wd4324",  -- 'structure was padded due to alignment specifier'.
     "/wd4189",  -- 'local variable is initialized but not referenced'.
   })
-  flags({
-    "MultiProcessorCompile",  -- Multiprocessor compilation.
-    "NoMinimalRebuild",       -- Required for /MP above.
-  })
 
   defines({
     "_CRT_NONSTDC_NO_DEPRECATE",
@@ -187,6 +189,17 @@ filter("platforms:Windows")
     "shlwapi",
     "dxguid",
     "bcrypt",
+  })
+
+filter({"platforms:Windows", "toolset:msc"})
+  flags({
+    "MultiProcessorCompile",  -- Multiprocessor compilation.
+    "NoMinimalRebuild",       -- Required for /MP above.
+  })
+
+filter({"platforms:Windows", "toolset:clang"})
+  removeflags({
+    "FatalWarnings", -- \WX flag is passed to llvm linker and causes an error
   })
 
 -- Create scratch/ path

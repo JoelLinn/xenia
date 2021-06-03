@@ -46,10 +46,6 @@ project("xenia-app")
     "volk",
     "xxhash",
   })
-  defines({
-    "XBYAK_NO_OP_NAMES",
-    "XBYAK_ENABLE_OMITTED_OPERAND",
-  })
   local_platform_files()
   files({
     "xenia_main.cc",

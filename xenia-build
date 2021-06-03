@@ -470,7 +470,7 @@ def run_premake(target_os, action, cc=None):
     return ret
 
 
-def run_platform_premake(target_os_override=None, cc='clang', devenv=None):
+def run_platform_premake(target_os_override=None, cc=None, devenv=None):
     """Runs all gyp configurations.
     """
     target_os = get_premake_target_os(target_os_override)
@@ -486,8 +486,6 @@ def run_platform_premake(target_os_override=None, cc='clang', devenv=None):
             devenv = 'androidmk'
         else:
             devenv = 'gmake2'
-    if target_os != 'linux':
-        cc = None
     return run_premake(target_os=target_os, action=devenv, cc=cc)
 
 
@@ -714,7 +712,7 @@ class PremakeCommand(Command):
             help_short='Runs premake to update all projects.',
             *args, **kwargs)
         self.parser.add_argument(
-            '--cc', default='clang', help='Compiler toolchain passed to premake')
+            '--cc', default=None, help='Compiler toolchain passed to premake (i.e. msc, clang, gcc)')
         self.parser.add_argument(
             '--devenv', default=None, help='Development environment')
         self.parser.add_argument(
