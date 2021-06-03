@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -25,13 +25,14 @@
 
 namespace xe {
 
+// CreateFile returns INVALID_HANDLE_VALUE in case of failure.
+// not constexpr on clang-cl:
+const HANDLE kFileHandleInvalid = INVALID_HANDLE_VALUE;
+// CreateFileMapping returns nullptr in case of failure.
+constexpr HANDLE kMappingHandleInvalid = nullptr;
+
 class Win32MappedMemory : public MappedMemory {
  public:
-  // CreateFile returns INVALID_HANDLE_VALUE in case of failure.
-  static constexpr HANDLE kFileHandleInvalid = INVALID_HANDLE_VALUE;
-  // CreateFileMapping returns nullptr in case of failure.
-  static constexpr HANDLE kMappingHandleInvalid = nullptr;
-
   Win32MappedMemory(const std::filesystem::path& path, Mode mode)
       : MappedMemory(path, mode) {}
 
@@ -140,7 +141,7 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(
 
   mm->file_handle = CreateFile(path.c_str(), file_access, file_share, nullptr,
                                create_mode, FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (mm->file_handle == Win32MappedMemory::kFileHandleInvalid) {
+  if (mm->file_handle == kFileHandleInvalid) {
     return nullptr;
   }
 
@@ -153,7 +154,7 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(
       CreateFileMappingFromApp(mm->file_handle, nullptr, ULONG(mapping_protect),
                                ULONG64(aligned_length), nullptr);
 #endif
-  if (mm->mapping_handle == Win32MappedMemory::kMappingHandleInvalid) {
+  if (mm->mapping_handle == kMappingHandleInvalid) {
     return nullptr;
   }
 
@@ -230,8 +231,8 @@ class Win32ChunkedMappedMemoryWriter : public ChunkedMappedMemoryWriter {
   class Chunk {
    public:
     explicit Chunk(size_t capacity)
-        : file_handle_(Win32MappedMemory::kFileHandleInvalid),
-          mapping_handle_(Win32MappedMemory::kMappingHandleInvalid),
+        : file_handle_(kFileHandleInvalid),
+          mapping_handle_(kMappingHandleInvalid),
           data_(nullptr),
           offset_(0),
           capacity_(capacity),
@@ -241,10 +242,10 @@ class Win32ChunkedMappedMemoryWriter : public ChunkedMappedMemoryWriter {
       if (data_) {
         UnmapViewOfFile(data_);
       }
-      if (mapping_handle_ != Win32MappedMemory::kMappingHandleInvalid) {
+      if (mapping_handle_ != kMappingHandleInvalid) {
         CloseHandle(mapping_handle_);
       }
-      if (file_handle_ != Win32MappedMemory::kFileHandleInvalid) {
+      if (file_handle_ != kFileHandleInvalid) {
         CloseHandle(file_handle_);
       }
     }
@@ -258,7 +259,7 @@ class Win32ChunkedMappedMemoryWriter : public ChunkedMappedMemoryWriter {
 
       file_handle_ = CreateFile(path.c_str(), file_access, file_share, nullptr,
                                 create_mode, FILE_ATTRIBUTE_NORMAL, nullptr);
-      if (file_handle_ == Win32MappedMemory::kFileHandleInvalid) {
+      if (file_handle_ == kFileHandleInvalid) {
         return false;
       }
 
@@ -271,7 +272,7 @@ class Win32ChunkedMappedMemoryWriter : public ChunkedMappedMemoryWriter {
                                                  ULONG(mapping_protect),
                                                  ULONG64(capacity_), nullptr);
 #endif
-      if (mapping_handle_ == Win32MappedMemory::kMappingHandleInvalid) {
+      if (mapping_handle_ == kMappingHandleInvalid) {
         return false;
       }
 
