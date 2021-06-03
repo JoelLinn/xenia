@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -241,7 +241,6 @@ std::string_view::size_type find_any_of(const std::string_view haystack,
 
   auto [haystack_begin, haystack_end] = make_citer(haystack);
   auto [needle_begin, needle_end] = make_citer(needles);
-  auto needle_count = count(needles);
 
   auto it = find_needle(haystack_begin, haystack_end, needle_begin, needle_end);
   if (it == haystack_end) {
@@ -261,7 +260,6 @@ std::string_view::size_type find_any_of_case(const std::string_view haystack,
 
   auto [haystack_begin, haystack_end] = make_citer(haystack);
   auto [needle_begin, needle_end] = make_citer(needles);
-  auto needle_count = count(needles);
 
   auto it =
       find_needle_case(haystack_begin, haystack_end, needle_begin, needle_end);

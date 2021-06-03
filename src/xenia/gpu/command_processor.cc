@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -1183,7 +1183,7 @@ bool CommandProcessor::ExecutePacketType3_DRAW_INDX(RingBuffer* reader,
   // initiate fetch of index buffer and draw
   // if dword0 != 0, this is a conditional draw based on viz query.
   // This ID matches the one issued in PM4_VIZ_QUERY
-  uint32_t dword0 = reader->ReadAndSwap<uint32_t>();  // viz query info
+  /* uint32_t dword0 = */ reader->ReadAndSwap<uint32_t>();  // viz query info
   // uint32_t viz_id = dword0 & 0x3F;
   // when true, render conditionally based on query result
   // uint32_t viz_use = dword0 & 0x100;
