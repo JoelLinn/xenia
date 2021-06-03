@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2014 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -20,8 +20,23 @@ namespace xe {
   static_assert(sizeof(type) == size,  \
                 "bad definition for " #type ": must be " #size " bytes")
 
-// We rely on assert being compiled out in NDEBUG.
+#if NDEBUG
+// Taken from libsdl SDL_assert.h
+// "while (0,0)" fools MSVC's /W4 warning level into thinking this condition
+// isn't constant.
+#ifdef XE_COMPILER_MSVC
+#define XE_NULL_WHILE_LOOP_CONDITION (0, 0)
+#else
+#define XE_NULL_WHILE_LOOP_CONDITION (0)
+#endif
+
+#define xenia_assert(condition)        \
+  do {                                 \
+    (void)sizeof((size_t)(condition)); \
+  } while (XE_NULL_WHILE_LOOP_CONDITION)
+#else
 #define xenia_assert assert
+#endif
 
 #define __XENIA_EXPAND(x) x
 #define __XENIA_ARGC(...)                                                     \
