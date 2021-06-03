@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -162,9 +162,8 @@ bool Win32FilePicker::Show(void* parent_window_handle) {
   std::vector<std::pair<std::u16string, std::u16string>> file_pairs;
   std::vector<COMDLG_FILTERSPEC> file_types;
   for (const auto& extension : this->extensions()) {
-    const auto& file_pair =
-        file_pairs.emplace_back(std::move(xe::to_utf16(extension.first)),
-                                std::move(xe::to_utf16(extension.second)));
+    const auto& file_pair = file_pairs.emplace_back(
+        xe::to_utf16(extension.first), xe::to_utf16(extension.second));
     file_types.push_back(
         {(LPCWSTR)file_pair.first.c_str(), (LPCWSTR)file_pair.second.c_str()});
   }

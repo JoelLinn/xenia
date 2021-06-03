@@ -4828,8 +4828,8 @@ void D3D12RenderTargetCache::PerformTransfersAndResolveClears(
             dest_d3d12_rt.resource(),
             dest_d3d12_rt.SetResourceState(D3D12_RESOURCE_STATE_DEPTH_WRITE),
             D3D12_RESOURCE_STATE_DEPTH_WRITE);
-        command_list.D3DOMSetRenderTargets(
-            0, nullptr, FALSE, &dest_d3d12_rt.descriptor_draw().GetHandle());
+        const auto descriptor = dest_d3d12_rt.descriptor_draw().GetHandle();
+        command_list.D3DOMSetRenderTargets(0, nullptr, FALSE, &descriptor);
         if (!use_stencil_reference_output_) {
           command_processor_.SetStencilReference(UINT8_MAX);
         }
@@ -4840,12 +4840,11 @@ void D3D12RenderTargetCache::PerformTransfersAndResolveClears(
             dest_d3d12_rt.resource(),
             dest_d3d12_rt.SetResourceState(D3D12_RESOURCE_STATE_RENDER_TARGET),
             D3D12_RESOURCE_STATE_RENDER_TARGET);
-        command_list.D3DOMSetRenderTargets(
-            1,
-            &(dest_d3d12_rt.descriptor_load_separate().IsValid()
-                  ? dest_d3d12_rt.descriptor_load_separate().GetHandle()
-                  : dest_d3d12_rt.descriptor_draw().GetHandle()),
-            FALSE, nullptr);
+        const auto descriptor =
+            dest_d3d12_rt.descriptor_load_separate().IsValid()
+                ? dest_d3d12_rt.descriptor_load_separate().GetHandle()
+                : dest_d3d12_rt.descriptor_draw().GetHandle();
+        command_list.D3DOMSetRenderTargets(1, &descriptor, FALSE, nullptr);
       }
 
       uint32_t dest_pitch_tiles = dest_rt_key.GetPitchTiles();
@@ -5457,12 +5456,11 @@ void D3D12RenderTargetCache::PerformTransfersAndResolveClears(
             dest_d3d12_rt.SetResourceState(D3D12_RESOURCE_STATE_RENDER_TARGET),
             D3D12_RESOURCE_STATE_RENDER_TARGET);
         if (clear_via_drawing) {
-          command_list.D3DOMSetRenderTargets(
-              1,
-              &(dest_d3d12_rt.descriptor_load_separate().IsValid()
-                    ? dest_d3d12_rt.descriptor_load_separate().GetHandle()
-                    : dest_d3d12_rt.descriptor_draw().GetHandle()),
-              FALSE, nullptr);
+          const auto descriptor =
+              dest_d3d12_rt.descriptor_load_separate().IsValid()
+                  ? dest_d3d12_rt.descriptor_load_separate().GetHandle()
+                  : dest_d3d12_rt.descriptor_draw().GetHandle();
+          command_list.D3DOMSetRenderTargets(1, &descriptor, FALSE, nullptr);
           are_current_command_list_render_targets_valid_ = true;
           D3D12_VIEWPORT clear_viewport;
           clear_viewport.TopLeftX = float(clear_rect.left);

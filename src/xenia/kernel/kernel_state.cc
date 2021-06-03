@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -435,10 +435,11 @@ void KernelState::UnloadUserModule(const object_ref<UserModule>& module,
   user_modules_.erase(iter);
 
   // Ensure this module was not somehow registered twice
+  const auto is_mod_equal = [&module](const object_ref<UserModule>& e) {
+    return e->path() == module->path();
+  };
   assert_true(std::find_if(user_modules_.begin(), user_modules_.end(),
-                           [&module](const auto& e) {
-                             return e->path() == module->path();
-                           }) == user_modules_.end());
+                           is_mod_equal) == user_modules_.end());
 
   object_table()->ReleaseHandle(module->handle());
 }

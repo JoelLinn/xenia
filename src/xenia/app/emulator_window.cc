@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -266,7 +266,7 @@ bool EmulatorWindow::Initialize() {
         MenuItem::Create(MenuItem::Type::kString, "Build commit on GitHub...",
                          "F2", std::bind(&EmulatorWindow::ShowCommitID, this)));
     help_menu->AddChild(MenuItem::Create(
-        MenuItem::Type::kString, "Recent changes on GitHub...", [this]() {
+        MenuItem::Type::kString, "Recent changes on GitHub...", []() {
           LaunchWebBrowser(
               "https://github.com/xenia-project/xenia/compare/" XE_BUILD_COMMIT
               "..." XE_BUILD_BRANCH);
@@ -277,7 +277,7 @@ bool EmulatorWindow::Initialize() {
                          std::bind(&EmulatorWindow::ShowHelpWebsite, this)));
     help_menu->AddChild(MenuItem::Create(
         MenuItem::Type::kString, "&About...",
-        [this]() { LaunchWebBrowser("https://xenia.jp/about/"); }));
+        []() { LaunchWebBrowser("https://xenia.jp/about/"); }));
   }
   main_menu->AddChild(std::move(help_menu));
 
