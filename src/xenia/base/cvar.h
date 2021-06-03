@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -160,8 +160,8 @@ CommandVar<T>::CommandVar(const char* name, T* default_value,
                           const char* description)
     : name_(name),
       default_value_(*default_value),
-      description_(description),
-      current_value_(default_value) {}
+      current_value_(default_value),
+      description_(description) {}
 
 template <class T>
 ConfigVar<T>::ConfigVar(const char* name, T* default_value,

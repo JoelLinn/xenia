@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -149,7 +149,7 @@ class Win32FileHandle : public FileHandle {
       return false;
     }
   }
-  bool SetLength(size_t length) {
+  bool SetLength(size_t length) override {
     LARGE_INTEGER position;
     position.QuadPart = length;
     if (!SetFilePointerEx(handle_, position, nullptr, SEEK_SET)) {
