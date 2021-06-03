@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2013 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -431,7 +431,7 @@ void Value::MulHi(Value* other, bool is_unsigned) {
       }
       break;
     case INT64_TYPE:
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
       if (is_unsigned) {
         constant.i64 = __umulh(constant.i64, other->constant.i64);
       } else {

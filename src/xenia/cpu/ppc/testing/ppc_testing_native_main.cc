@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -15,9 +15,9 @@
 #include "xenia/base/platform.h"
 #include "xenia/base/string_util.h"
 
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
 #include "xenia/base/platform_win.h"
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 
 DEFINE_string(test_path, "src/xenia/cpu/ppc/testing/",
               "Directory scanned for test files.");
@@ -414,21 +414,21 @@ bool DiscoverTests(std::wstring& test_path,
   return true;
 }
 
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
 int filter(unsigned int code) {
   if (code == EXCEPTION_ILLEGAL_INSTRUCTION) {
     return EXCEPTION_EXECUTE_HANDLER;
   }
   return EXCEPTION_CONTINUE_SEARCH;
 }
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 
 void ProtectedRunTest(TestSuite& test_suite, TestRunner& runner,
                       TestCase& test_case, int& failed_count,
                       int& passed_count) {
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
   __try {
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 
     if (!runner.Setup(test_suite)) {
       XELOGE("    TEST FAILED SETUP");
@@ -441,12 +441,12 @@ void ProtectedRunTest(TestSuite& test_suite, TestRunner& runner,
       ++failed_count;
     }
 
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
   } __except (filter(GetExceptionCode())) {
     XELOGE("    TEST FAILED (UNSUPPORTED INSTRUCTION)");
     ++failed_count;
   }
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 }
 
 bool RunTests(const std::wstring& test_name) {

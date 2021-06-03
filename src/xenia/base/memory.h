@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2020 Ben Vanik. All rights reserved.                             *
+ * Copyright 2021 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -88,7 +88,7 @@ bool QueryProtect(void* base_address, size_t& length, PageAccess& access_out);
 // The memory must be freed with AlignedFree.
 template <typename T>
 inline T* AlignedAlloc(size_t alignment) {
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
   return reinterpret_cast<T*>(_aligned_malloc(sizeof(T), alignment));
 #else
   void* ptr = nullptr;
@@ -96,17 +96,17 @@ inline T* AlignedAlloc(size_t alignment) {
     return nullptr;
   }
   return reinterpret_cast<T*>(ptr);
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 }
 
 // Frees memory previously allocated with AlignedAlloc.
 template <typename T>
 void AlignedFree(T* ptr) {
-#if XE_COMPILER_MSVC
+#if XE_PLATFORM_WIN32
   _aligned_free(ptr);
 #else
   free(ptr);
-#endif  // XE_COMPILER_MSVC
+#endif  // XE_PLATFORM_WIN32
 }
 
 #if XE_PLATFORM_WIN32

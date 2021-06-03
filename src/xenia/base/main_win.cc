@@ -171,6 +171,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR command_line, int) {
   return xe::Main();
 }
 
+// TODO(Joel Linn) Check how to fix
+// "/manifestdependency: is not allowed in .drectve" with clang-cl
+#if XE_COMPILER_MSVC
 #if defined _M_IX86
 #pragma comment( \
     linker,      \
@@ -187,4 +190,5 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR command_line, int) {
 #pragma comment( \
     linker,      \
     "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")  // NOLINT(whitespace/line_length)
+#endif
 #endif
