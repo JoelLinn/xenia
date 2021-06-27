@@ -34,7 +34,7 @@ rtti("On")
 symbols("On")
 
 -- TODO(DrChat): Find a way to disable this on other architectures.
-if ARCH ~= "ppc64" then
+if ARCH ~= "ppc64" and ARCH ~= "aarch64" then
   filter("architecture:x86_64")
     vectorextensions("AVX")
   filter({})
@@ -202,7 +202,7 @@ workspace("xenia")
     platforms({"Android"})
     ndkstl("c++_static")
   else
-    architecture("x86_64")
+    architecture("ARM")
     if os.istarget("linux") then
       platforms({"Linux"})
     elseif os.istarget("windows") then
