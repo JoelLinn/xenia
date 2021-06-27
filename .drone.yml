@@ -211,3 +211,50 @@ steps:
   - build-premake-release-all
   - build-cmake-debug-all
   - build-cmake-release-all
+
+
+---
+kind: pipeline
+type: docker
+name: aarch64-linux
+platform:
+  os: linux
+  arch: arm64
+
+steps:
+- name: tests
+  image: ubuntu:groovy # hirsute needs updated kernel on docker host
+  commands:
+  - |
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends  \
+      build-essential                           \
+      ca-certificates                           \
+      git                                       \
+      python3                                   \
+      clang                                     \
+      clang-format                              \
+      cmake                                     \
+      llvm                                      \
+      llvm-dev                                  \
+      libc++-dev                                \
+      libc++abi-dev                             \
+      libgtk-3-dev                              \
+      liblz4-dev                                \
+      libpthread-stubs0-dev                     \
+      libsdl2-dev                               \
+      libvulkan-dev                             \
+      libx11-dev                                \
+      libx11-xcb-dev
+  - git submodule update --init --depth 1 -j $(nproc)
+  - |
+    export CC=clang
+    export CXX=clang++
+    export AR=llvm-ar
+    $CXX --version
+    $AR --version
+    python3 --version
+    ./xenia-build premake
+    ./xenia-build build --no_premake -j$(nproc) --config=Release --target=xenia-base-tests
+  - ./build/bin/Linux/Release/xenia-base-tests
