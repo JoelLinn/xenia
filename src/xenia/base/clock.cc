@@ -20,10 +20,12 @@ DEFINE_bool(clock_no_scaling, false,
             "Disable scaling code. Time management and locking is bypassed. "
             "Guest system time is directly pulled from host.",
             "CPU");
+#if XE_HAS_CLOCK_RAW
 DEFINE_bool(clock_source_raw, false,
             "Use the RDTSC instruction as the time source. "
             "Host CPU must support invariant TSC.",
             "CPU");
+#endif
 
 namespace xe {
 
@@ -109,16 +111,24 @@ inline uint64_t QueryGuestSystemTimeOffset() {
 }
 
 uint64_t Clock::QueryHostTickFrequency() {
+#if XE_HAS_CLOCK_RAW
   if (cvars::clock_source_raw) {
     return host_tick_frequency_raw();
   } else {
+#else
+  {
+#endif
     return host_tick_frequency_platform();
   }
 }
 uint64_t Clock::QueryHostTickCount() {
+#if XE_HAS_CLOCK_RAW
   if (cvars::clock_source_raw) {
     return host_tick_count_raw();
   } else {
+#else
+  {
+#endif
     return host_tick_count_platform();
   }
 }

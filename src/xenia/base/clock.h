@@ -14,20 +14,31 @@
 
 #include "xenia/base/cvar.h"
 
+#if XE_ARCH_AMD64
+#define XE_HAS_CLOCK_RAW 1
+#else
+#define XE_HAS_CLOCK_RAW 0
+#endif
+
 DECLARE_bool(clock_no_scaling);
+#if XE_HAS_CLOCK_RAW
 DECLARE_bool(clock_source_raw);
+#endif
 
 namespace xe {
 
 class Clock {
  public:
   // Host ticks-per-second. Generally QueryHostTickFrequency should be used.
-  // Either from platform suplied time source or from hardware directly.
+  // Either from platform suplied time source or raw from hardware.
   static uint64_t host_tick_frequency_platform();
-  static uint64_t host_tick_frequency_raw();
   // Host tick count. Generally QueryHostTickCount() should be used.
   static uint64_t host_tick_count_platform();
+
+#if XE_HAS_CLOCK_RAW
+  static uint64_t host_tick_frequency_raw();
   static uint64_t host_tick_count_raw();
+#endif
 
   // Queries the host tick frequency.
   static uint64_t QueryHostTickFrequency();
